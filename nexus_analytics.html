@@ -1,0 +1,3268 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Nexus Analytics 2.0</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+:root{
+  --bg:#0b0e14; --panel:#11151f; --panel2:#161b27; --border:#222838;
+  --text:#e6e9f0; --muted:#8993a8; --accent:#5b8cff; --accent2:#22d3a5;
+  --warn:#ffb454; --danger:#ff6b6b; --radius:10px;
+}
+*{box-sizing:border-box;}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);}
+button{font-family:inherit;}
+
+/* ---------- LAYOUT SHELL ---------- */
+#shell{display:flex;min-height:100vh;}
+#sidebar{
+  width:230px;background:var(--panel);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;flex-shrink:0;
+}
+#sidebar .brand{padding:20px 18px;font-weight:700;font-size:17px;letter-spacing:.3px;border-bottom:1px solid var(--border);}
+#sidebar .brand span{color:var(--accent);}
+#nav-list{list-style:none;margin:0;padding:10px;flex:1;overflow-y:auto;}
+#nav-list li{
+  display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius);
+  cursor:pointer;color:var(--muted);font-size:14px;margin-bottom:2px;transition:.15s;
+}
+#nav-list li:hover{background:var(--panel2);color:var(--text);}
+#nav-list li.active{background:rgba(91,140,255,.12);color:var(--accent);font-weight:600;}
+#nav-list li .ic{width:18px;text-align:center;}
+
+#main{flex:1;display:flex;flex-direction:column;min-width:0;}
+#topbar{
+  height:56px;border-bottom:1px solid var(--border);display:flex;align-items:center;
+  justify-content:space-between;padding:0 20px;background:var(--panel);flex-shrink:0;
+}
+#topbar h1{font-size:16px;margin:0;font-weight:600;}
+#menu-toggle{display:none;background:none;border:none;color:var(--text);font-size:20px;cursor:pointer;}
+
+#content-wrap{flex:1;display:flex;overflow:hidden;}
+#filters-panel{
+  width:260px;background:var(--panel);border-right:1px solid var(--border);
+  padding:16px;overflow-y:auto;flex-shrink:0;transition:margin-left .2s;
+}
+#filters-panel.collapsed{margin-left:-260px;}
+#filters-toggle{
+  background:var(--panel2);border:1px solid var(--border);color:var(--muted);
+  border-radius:8px;padding:5px 10px;cursor:pointer;font-size:12px;
+}
+#module-view{flex:1;overflow-y:auto;padding:20px;}
+
+.filt-group{margin-bottom:18px;}
+.filt-group h3{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:0 0 8px;}
+.filt-row{display:flex;gap:6px;margin-bottom:8px;}
+.filt-row input,.filt-row select{
+  width:100%;background:var(--panel2);border:1px solid var(--border);color:var(--text);
+  padding:7px 8px;border-radius:7px;font-size:13px;
+}
+.chip-row{display:flex;flex-wrap:wrap;gap:6px;}
+.chip{
+  background:var(--panel2);border:1px solid var(--border);color:var(--muted);
+  padding:5px 10px;border-radius:20px;font-size:12px;cursor:pointer;user-select:none;
+}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.quickbtn{
+  background:var(--panel2);border:1px solid var(--border);color:var(--text);
+  padding:6px 8px;border-radius:7px;font-size:12px;cursor:pointer;width:100%;text-align:left;margin-bottom:5px;
+}
+.quickbtn:hover{border-color:var(--accent);}
+
+/* ---------- KPI / CARDS ---------- */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;}
+.kpi-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;}
+.kpi-card .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+.kpi-card .val{font-size:22px;font-weight:700;margin-top:4px;}
+.kpi-card .sub{font-size:11px;color:var(--accent2);margin-top:2px;}
+
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px;}
+.panel h2{font-size:13px;margin:0 0 12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);}
+th{position:sticky;top:0;background:var(--panel);color:var(--muted);font-weight:600;cursor:pointer;}
+tbody tr:hover{background:var(--panel2);}
+
+#drop-zone{
+  border:2px dashed var(--accent);border-radius:var(--radius);padding:28px 20px;text-align:center;
+  color:var(--text);cursor:pointer;margin-bottom:20px;background:rgba(91,140,255,.08);
+}
+#drop-zone:active{background:rgba(91,140,255,.16);}
+#drop-zone.drag{border-color:var(--accent);color:var(--accent);}
+#progress-wrap{height:6px;background:var(--panel2);border-radius:4px;overflow:hidden;margin-top:12px;display:none;}
+#progress-bar{height:100%;width:0%;background:var(--accent);transition:.2s;}
+
+/* ---------- LOGIN ---------- */
+#login-screen{
+  position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;
+  justify-content:center;z-index:1000;flex-direction:column;gap:20px;
+}
+#login-screen.hidden{display:none;}
+.login-card{
+  background:var(--panel);border:1px solid var(--border);border-radius:16px;
+  padding:40px 36px;text-align:center;max-width:360px;width:90%;
+}
+.login-card h1{font-size:26px;font-weight:700;color:var(--text);margin:0 0 4px;}
+.login-card h1 span{color:var(--accent);}
+.login-card p{color:var(--muted);font-size:13px;margin:0 0 28px;}
+.btn-google{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  background:#fff;color:#1a1a1a;border:none;border-radius:8px;
+  padding:12px 20px;font-size:14px;font-weight:600;cursor:pointer;width:100%;
+}
+.btn-google:hover{background:#f0f0f0;}
+.btn-google svg{width:20px;height:20px;}
+.user-badge{
+  display:flex;align-items:center;gap:8px;padding:5px 10px;
+  background:var(--panel2);border:1px solid var(--border);border-radius:20px;
+  font-size:12px;color:var(--muted);cursor:pointer;
+}
+.user-badge img{width:22px;height:22px;border-radius:50%;}
+
+/* ---------- CONFIGURAÇÕES ---------- */
+.config-tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:0;}
+.config-tab{
+  padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;
+  color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;
+}
+.config-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;}
+.form-group{display:flex;flex-direction:column;gap:4px;}
+.form-group label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+.form-group input,.form-group select{
+  background:var(--panel2);border:1px solid var(--border);color:var(--text);
+  padding:8px 10px;border-radius:7px;font-size:13px;font-family:inherit;
+}
+.form-group input:focus,.form-group select:focus{outline:none;border-color:var(--accent);}
+.btn-primary{
+  background:var(--accent);color:#fff;border:none;padding:9px 18px;
+  border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;
+}
+.btn-danger-sm{
+  background:none;border:1px solid var(--danger);color:var(--danger);
+  padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;
+}
+.btn-edit-sm{
+  background:none;border:1px solid var(--accent);color:var(--accent);
+  padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;margin-right:4px;
+}
+.data-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px;}
+.data-table th{padding:8px 10px;text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;border-bottom:1px solid var(--border);}
+.data-table td{padding:8px 10px;border-bottom:1px solid var(--border);}
+.data-table tr:hover td{background:var(--panel2);}
+.badge-ativa{color:var(--accent2);font-size:11px;font-weight:600;}
+.badge-encerrada{color:var(--danger);font-size:11px;font-weight:600;}
+.badge-suspensa{color:var(--warn);font-size:11px;font-weight:600;}
+@media(max-width:880px){
+  .form-grid{grid-template-columns:1fr;}
+}
+
+/* ---------- TABELAS — scroll horizontal seguro (mobile e desktop estreito) ---------- */
+.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;width:100%;}
+.table-scroll table{min-width:520px;}
+
+/* ---------- MOBILE (≤ 880px) ---------- */
+@media(max-width:880px){
+  /* Sidebar */
+  #sidebar{position:fixed;inset:0 auto 0 0;z-index:50;transform:translateX(-100%);transition:.2s;}
+  #sidebar.open{transform:translateX(0);}
+  #menu-toggle{display:block;}
+
+  /* Filtros */
+  #filters-panel{position:fixed;inset:56px 0 0 0;z-index:40;width:100%;transform:translateY(-110%);transition:.2s;}
+  #filters-panel.mobile-open{transform:translateY(0);}
+  #filters-panel.collapsed{margin-left:0;}
+  #filters-toggle{display:none;}
+
+  /* Layout */
+  #content-wrap{position:relative;}
+  #module-view{padding:12px;}
+
+  /* KPI cards — mínimo 140px, quebra suave */
+  .kpi-grid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:14px;}
+  .kpi-card{padding:10px 12px;}
+  .kpi-card .val{font-size:18px;}
+  .kpi-card .lbl{font-size:10px;}
+
+  /* Tabelas */
+  .panel{padding:10px;}
+  table,thead,tbody,th,td,tr{display:revert;}
+  .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  th,td{padding:7px 8px;font-size:12px;white-space:nowrap;}
+
+  /* Touch targets — mínimo 44×44px (Apple HIG) */
+  .chip{padding:8px 12px;font-size:13px;min-height:36px;display:inline-flex;align-items:center;}
+  .btn-primary{padding:11px 18px;min-height:44px;}
+  .btn-edit-sm,.btn-danger-sm{padding:8px 12px;min-height:36px;}
+  .quickbtn{padding:10px 8px;min-height:40px;}
+  .config-tab{padding:10px 14px;font-size:13px;}
+
+  /* Formulários */
+  .filt-row{flex-direction:column;gap:8px;}
+  .filt-row input,.filt-row select{font-size:16px;} /* Evita zoom automático no iOS */
+  .form-group input,.form-group select{font-size:16px;padding:10px;}
+
+  /* Drop zone */
+  #drop-zone{padding:20px 14px;font-size:14px;}
+}
+
+/* ---------- DESKTOP (> 880px) — refinamentos visuais ---------- */
+@media(min-width:881px){
+  #module-view{padding:24px 28px;}
+  .kpi-grid{gap:14px;margin-bottom:24px;}
+  .kpi-card{padding:16px 20px;}
+  .kpi-card .val{font-size:24px;}
+  .panel{padding:20px;}
+  th,td{padding:9px 12px;}
+  .config-tab{padding:9px 18px;}
+}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:30;display:none;}
+.overlay.show{display:block;}
+</style>
+</head>
+<body>
+
+<!-- TELA DE LOGIN -->
+<div id="login-screen" style="display:none;">
+  <div class="login-card">
+    <h1>Nexus <span>Analytics</span></h1>
+    <p>Plataforma de análise operacional</p>
+    <button class="btn-google" id="btn-google-login">
+      <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+      Entrar com Google
+    </button>
+  </div>
+</div>
+
+<!-- TELA AGUARDANDO APROVAÇÃO -->
+<div id="pending-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:1000;align-items:center;justify-content:center;flex-direction:column;">
+  <div class="login-card">
+    <h1>Nexus <span>Analytics</span></h1>
+    <div style="font-size:40px;margin:16px 0;">⏳</div>
+    <p id="pending-msg" style="font-size:14px;color:var(--muted);">Aguardando aprovação do administrador...</p>
+    <button onclick="NexusAuth.logout()" style="margin-top:16px;background:none;border:1px solid var(--border);color:var(--muted);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;">Sair</button>
+  </div>
+</div>
+
+<div id="shell" style="display:none;">
+  <nav id="sidebar">
+    <div class="brand">Nexus <span>Analytics</span></div>
+    <ul id="nav-list"></ul>
+  </nav>
+
+  <div id="main">
+    <div id="topbar">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button id="menu-toggle">☰</button>
+        <h1 id="module-title">Permanência</h1>
+      </div>
+      <button id="filters-toggle">Filtros ▸</button>
+      <div class="user-badge" id="user-badge" onclick="NexusAuth.logout()" title="Clique para sair">
+        <span id="user-name">...</span>
+      </div>
+    </div>
+
+    <div id="content-wrap">
+      <aside id="filters-panel"></aside>
+      <div id="module-view"></div>
+    </div>
+  </div>
+</div>
+<div class="overlay" id="overlay"></div>
+
+<script>
+/* ======================================================================
+   NEXUS CORE
+   ====================================================================== */
+const Nexus = {
+  modules: {},
+  activeModuleId: null,
+  rawData: [],       // dados normalizados (Schema Universal) — fonte única de verdade
+  filteredData: [],
+  _filialAtual: null,
+  filters: {
+    dateStart: null, dateEnd: null,
+    weekdays: new Set([0,1,2,3,4,5,6])
+  },
+
+  registerModule(mod){ this.modules[mod.id] = mod; },
+
+  async initAsync(){
+    await NexusDB.open();
+    this.renderNav();
+    this.bindShell();
+
+    // Hidratação automática: restaura relatório salvo no IndexedDB (F5 / iOS background)
+    const saved = await NexusDB.load();
+    if(saved && Array.isArray(saved.data) && saved.data.length > 0){
+      Nexus.rawData      = saved.data;
+      Nexus._filialAtual = saved.filial || null;
+      Nexus.applyFilters();
+
+      // Banner discreto de restauração (desaparece em 4s)
+      const banner = document.createElement('div');
+      banner.style.cssText = 'position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;padding:8px 20px;border-radius:8px;font-size:13px;z-index:9999;box-shadow:0 2px 10px rgba(0,0,0,.4)';
+      banner.textContent = '📂 Relatório restaurado automaticamente';
+      document.body.appendChild(banner);
+      setTimeout(() => banner.remove(), 4000);
+    }
+
+    this.goTo(Object.keys(this.modules)[0]);
+  },
+
+  renderNav(){
+    const ul = document.getElementById('nav-list');
+    ul.innerHTML = '';
+    Object.values(this.modules).forEach(m=>{
+      const li = document.createElement('li');
+      li.dataset.id = m.id;
+      li.innerHTML = `<span class="ic">${m.icon}</span><span>${m.nome}</span>`;
+      li.onclick = ()=> { this.goTo(m.id); document.getElementById('sidebar').classList.remove('open'); document.getElementById('overlay').classList.remove('show'); };
+      ul.appendChild(li);
+    });
+  },
+
+  goTo(id){
+    this.activeModuleId = id;
+    document.querySelectorAll('#nav-list li').forEach(li=>li.classList.toggle('active', li.dataset.id===id));
+    document.getElementById('module-title').textContent = this.modules[id].nome;
+    this.applyFilters();
+    this.modules[id].renderFilters(document.getElementById('filters-panel'));
+    this.modules[id].render(document.getElementById('module-view'));
+  },
+
+  applyFilters(){
+    const f = this.filters;
+    this.filteredData = this.rawData.filter(d=>{
+      if(f.dateStart && d.timestampPagamento < f.dateStart) return false;
+      if(f.dateEnd && d.timestampPagamento > f.dateEnd) return false;
+      if(!f.weekdays.has(d.diaPagamento)) return false;
+      return true;
+    });
+  },
+
+  refreshActive(){
+    this.applyFilters();
+    this.modules[this.activeModuleId].render(document.getElementById('module-view'));
+  },
+
+  bindShell(){
+    document.getElementById('menu-toggle').onclick = ()=>{
+      document.getElementById('sidebar').classList.toggle('open');
+      document.getElementById('overlay').classList.toggle('show');
+    };
+    document.getElementById('overlay').onclick = ()=>{
+      document.getElementById('sidebar').classList.remove('open');
+      document.getElementById('filters-panel').classList.remove('mobile-open');
+      document.getElementById('overlay').classList.remove('show');
+    };
+    document.getElementById('filters-toggle').onclick = ()=>{
+      const isMobile = window.innerWidth <= 880;
+      const fp = document.getElementById('filters-panel');
+      if(isMobile){
+        fp.classList.toggle('mobile-open');
+        document.getElementById('overlay').classList.toggle('show');
+      } else {
+        fp.classList.toggle('collapsed');
+      }
+    };
+  },
+
+  /* ---------------- ENGINE DE IMPORTAÇÃO + NORMALIZAÇÃO ---------------- */
+  async importFiles(fileList, onProgress){
+    let all = [];
+    const files = Array.from(fileList);
+    for(let i=0;i<files.length;i++){
+      const file = files[i];
+      const rows = await this._parseFile(file);
+      all = all.concat(this._normalize(rows));
+      onProgress(Math.round(((i+1)/files.length)*100));
+    }
+    this.rawData = this.rawData.concat(all);
+    return all.length;
+  },
+
+  _parseFile(file){
+    return new Promise((resolve)=>{
+      const ext = file.name.split('.').pop().toLowerCase();
+      if(ext==='csv'){
+        // header:false → array de arrays (igual ao XLSX), para _normalize() pular
+        // as ~10 linhas de metadados do relatório e usar índices de coluna fixos
+        Papa.parse(file, {
+          header: false,
+          skipEmptyLines: true,
+          complete: r => resolve(r.data)
+        });
+      } else if(ext==='xlsx' || ext==='xls'){
+        const reader = new FileReader();
+        reader.onload = e=>{
+          const wb = XLSX.read(e.target.result, {type:'binary'});
+          const sheet = wb.Sheets[wb.SheetNames[0]];
+          // header:1 → array de arrays — necessário porque o relatório tem metadados antes do cabeçalho real
+          resolve(XLSX.utils.sheet_to_json(sheet, {header:1, defval:''}));
+        };
+        reader.readAsBinaryString(file);
+      } else {
+        resolve([]); // PDF entra na Fase 5 — fora do escopo deste esqueleto
+      }
+    });
+  },
+
+  // Resolve índices de colunas lendo o cabeçalho real do relatório.
+  // Busca por nome em vez de posição fixa — imune a colunas novas/reordenadas na origem.
+  // Nomes confirmados contra relatório "Tickets Pagos e Cancelados" real (19/07/2026).
+  _resolverColunas(rows){
+    let headerIdx = -1;
+    let headerRow = null;
+
+    for(let i = 0; i < Math.min(15, rows.length); i++){
+      const row = Array.isArray(rows[i]) ? rows[i] : Object.values(rows[i]);
+      const vals = row.map(c => String(c||'').trim().toUpperCase());
+      if(vals.some(v => v === 'TICKET') && vals.some(v => v.includes('VALOR'))){
+        headerRow = vals;
+        headerIdx = i;
+        break;
+      }
+    }
+
+    if(!headerRow){
+      console.warn('_resolverColunas: cabeçalho não encontrado — usando índices padrão como fallback');
+      return {
+        headerIdx: 9,
+        ticket:1, entrada:5, hora_entrada:7, saida:9, hora_saida:10,
+        formaPag:12, valor:13, dataPagto:16, horaPagto:17,
+        perm:18, cancelado:19, tolerancia:20,
+        placa:4, usuarioPagamento:15, nomeCliente:32, telefoneCliente:33, detalhe:34
+      };
+    }
+
+    const idx = (...termos) => {
+      const i = headerRow.findIndex(c => termos.some(t => c.includes(t)));
+      return i >= 0 ? i : null;
+    };
+
+    return {
+      headerIdx,
+      ticket:       idx('TICKET'),
+      entrada:      idx('DATA ENTRADA', 'DT ENTRADA'),
+      hora_entrada: idx('HORA ENTRADA'),
+      saida:        idx('DATA SAIDA', 'DATA SAÍDA', 'DT SAIDA'),
+      hora_saida:   idx('HORA SAIDA', 'HORA SAÍDA'),
+      formaPag:     idx('FORMA PAGAMENTO', 'FORMA PAG'),
+      valor:        idx('VALOR'),
+      dataPagto:    idx('DATA PAGTO', 'DT PAGTO'),
+      horaPagto:    idx('HORA PAGTO'),
+      perm:         idx('PERMANÊNCIA', 'PERMANENCIA'),
+      cancelado:    idx('CANCELADO'),
+      tolerancia:   idx('TOLERÂNCIA', 'TOLERANCIA'),
+      // Colunas do Módulo de Cancelados — validadas contra relatório-modelo real
+      placa:            idx('PLACA'),
+      usuarioPagamento: idx('USUARIO PAGAMENTO', 'USUÁRIO PAGAMENTO'),
+      nomeCliente:      idx('NOME CLIENTE'),
+      telefoneCliente:  idx('TELEFONE CLIENTE'),
+      detalhe:          idx('DETALHE'),
+    };
+  },
+
+  // Normalizador mapeado para o relatório "Tickets Pagos e Cancelados"
+  // Cabeçalho detectado dinamicamente por _resolverColunas() — imune a reordenação de colunas.
+  _normalize(rows){
+    const isArrayRow = Array.isArray(rows[0]);
+    const COL = this._resolverColunas(rows);
+    // Pula até a linha após o cabeçalho detectado dinamicamente
+    const dataRows = isArrayRow ? rows.slice(COL.headerIdx + 1) : rows;
+
+    const parseDataHora = (dataStr, horaStr) => {
+      if(!dataStr) return null;
+      const ds = String(dataStr).trim();
+      const hs = String(horaStr||'').trim();
+      const m = ds.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+      if(!m) return null;
+      const [,d,mo,y] = m;
+      const time = hs.match(/\d{2}:\d{2}/) ? hs.substring(0,5) : '00:00';
+      // Força fuso BRT (UTC-3) — evita que dispositivos em outro fuso (ex: iOS em viagem)
+      // desloquem transações noturnas para o dia errado
+      return new Date(`${y}-${mo}-${d}T${time}:00-03:00`);
+    };
+
+    // Helpers de data sempre em BRT, independente do fuso do dispositivo
+    const diaSemana = ts => new Date(ts.toLocaleString('en-US', {timeZone:'America/Sao_Paulo'})).getDay();
+    const dataStr   = ts => ts.toLocaleDateString('pt-BR', {timeZone:'America/Sao_Paulo'});
+    // jan1 forçado em BRT — elimina brecha onde new Date(year,0,1) usa fuso local do aparelho
+    const semanaStr = ts => {
+      const jan1 = new Date(`${ts.getFullYear()}-01-01T00:00:00-03:00`);
+      const wk   = Math.ceil(((ts - jan1) / 86400000 + jan1.getDay() + 1) / 7);
+      return `${ts.getFullYear()}-W${String(wk).padStart(2,'0')}`;
+    };
+
+    const parsePermMin = str => {
+      if(!str) return 0;
+      const m = String(str).match(/(\d+)d\s+(\d+):(\d+):(\d+)/);
+      if(!m) return 0;
+      const [,d,h,min] = m;
+      return parseInt(d)*1440 + parseInt(h)*60 + parseInt(min);
+    };
+
+    const parseValor = str => {
+      if(!str) return 0;
+      return parseFloat(String(str).replace(/[R$\s]/g,'').replace(',','.')) || 0;
+    };
+
+    return dataRows
+      .map((r, i) => {
+        const get = col => isArrayRow ? r[col] : Object.values(r)[col];
+        const entrada = parseDataHora(get(COL.entrada), get(COL.hora_entrada));
+        if(!entrada || isNaN(entrada.getTime())) return null;
+
+        const forma = String(get(COL.formaPag)||'').trim();
+        const isCancelado = String(get(COL.cancelado)||'').trim().toUpperCase() === 'CANCELADO'
+          || forma.toUpperCase() === 'TICKET CANCELADO';
+
+        // timestampPagamento: usado como referência de dia/semana em TODOS os módulos
+        // (filtros, dia da semana, agrupamento semanal, melhor dia). NÃO é usado para
+        // recalcular permanência — isso continua vindo direto da coluna PERMANÊNCIA.
+        // Sem DATA PAGTO válida (raro; 0 casos no relatório-modelo), o registro é
+        // descartado em vez de "chutar" a data de entrada como referência de pagamento.
+        const pagamento = parseDataHora(get(COL.dataPagto), get(COL.horaPagto));
+        if(!pagamento || isNaN(pagamento.getTime())) return null;
+
+        const valorPago     = parseValor(get(COL.valor));
+        const formaPagamento = isCancelado ? 'Cancelado' : (forma || 'N/D');
+        const tolerancia    = String(get(COL.tolerancia)||'').trim().toLowerCase() === 'sim';
+        const status        = isCancelado ? 'cancelado' : 'pago';
+
+        // Campos do Módulo de Cancelados — extraídos para todo registro (não só cancelados)
+        // para manter _normalize() como única fonte de verdade normalizada.
+        const placa            = String(get(COL.placa)||'').trim();
+        const usuarioPagamento = String(get(COL.usuarioPagamento)||'').trim();
+        const nomeCliente      = String(get(COL.nomeCliente)||'').trim();
+        const telefoneCliente  = String(get(COL.telefoneCliente)||'').trim();
+        const detalhe          = String(get(COL.detalhe)||'').trim();
+
+        // isPago: regra universal calculada uma vez — módulos fazem filter(d=>d.isPago)
+        const fp = formaPagamento.toLowerCase();
+        const isPago = status === 'pago'
+          && valorPago > 0
+          && !tolerancia
+          && fp !== 'n/d'
+          && !fp.includes('sem pagamento')
+          && !fp.includes('cancelado')
+          && !fp.includes('desconto');
+
+        return {
+          id: 'r'+i+'_'+Date.now(),
+          ticket: String(get(COL.ticket)||'').trim(),
+          timestampEntrada: entrada,
+          timestampSaida: parseDataHora(get(COL.saida), get(COL.hora_saida)),
+          timestampPagamento: pagamento,
+          // Pré-computados uma vez aqui — evita recalcular em cada loop de módulo
+          diaPagamento:       diaSemana(pagamento),   // 0=Dom…6=Sáb, sempre em BRT
+          dataPagamentoStr:   dataStr(pagamento),      // "DD/MM/YYYY" em BRT
+          semanaPagamentoStr: semanaStr(pagamento),    // "YYYY-WWW" em BRT (jan1 forçado)
+          isPago,
+          permanenciaMin: parsePermMin(get(COL.perm)),
+          valorPago,
+          formaPagamento,
+          tolerancia,
+          status,
+          placa,
+          usuarioPagamento,
+          nomeCliente,
+          telefoneCliente,
+          detalhe
+        };
+      })
+      .filter(Boolean);
+  }
+};
+
+/* ======================================================================
+   MÓDULO PILOTO: PERMANÊNCIA
+   Implementa o contrato: renderFilters(), render()
+   Qualquer módulo futuro segue exatamente este mesmo padrão.
+   ====================================================================== */
+const ModuloPermanencia = {
+  id: 'permanencia',
+  nome: 'Permanência',
+  icon: '📍',
+  permInterval: 60, // 30 ou 60 minutos — intervalo do gráfico de permanência
+
+  // Converte minutos → "HH:MM"
+  minToHHMM(min){
+    const h = Math.floor(min / 60);
+    const m = Math.round(min % 60);
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  },
+
+  renderFilters(container){
+    container.innerHTML = `
+      <div class="filt-group">
+        <h3>Data inicial / final</h3>
+        <div class="filt-row">
+          <input type="date" id="f-start">
+          <input type="date" id="f-end">
+        </div>
+      </div>
+
+      <div class="filt-group">
+        <h3>Dias da semana</h3>
+        <div class="chip-row" id="weekday-chips">
+          ${['D','S','T','Q','Q','S','S'].map((d,i)=>`<div class="chip on" data-day="${[0,1,2,3,4,5,6][i]}">${d}</div>`).join('')}
+        </div>
+      </div>
+
+      <div class="filt-group">
+        <h3>Intervalo de permanência</h3>
+        <div class="chip-row" id="interval-chips">
+          <div class="chip" data-interval="30">30 min</div>
+          <div class="chip on" data-interval="60">1 hora</div>
+        </div>
+      </div>
+
+      <button class="quickbtn" id="btn-clear" style="margin-top:8px;color:var(--danger);border-color:var(--danger);">✕ Limpar filtros</button>
+    `;
+    this._bindFilters(container);
+  },
+
+  _bindFilters(container){
+    container.querySelector('#f-start').onchange = e=>{
+      Nexus.filters.dateStart = e.target.value ? new Date(e.target.value + 'T00:00:00-03:00') : null;
+      Nexus.refreshActive();
+    };
+    container.querySelector('#f-end').onchange = e=>{
+      Nexus.filters.dateEnd = e.target.value ? new Date(e.target.value + 'T23:59:59-03:00') : null;
+      Nexus.refreshActive();
+    };
+
+    container.querySelectorAll('#weekday-chips .chip').forEach(chip=>{
+      chip.onclick = ()=>{
+        const day = parseInt(chip.dataset.day);
+        chip.classList.toggle('on');
+        if(chip.classList.contains('on')) Nexus.filters.weekdays.add(day);
+        else Nexus.filters.weekdays.delete(day);
+        Nexus.refreshActive();
+      };
+    });
+
+    container.querySelectorAll('#interval-chips .chip').forEach(chip=>{
+      chip.onclick = ()=>{
+        container.querySelectorAll('#interval-chips .chip').forEach(c=>c.classList.remove('on'));
+        chip.classList.add('on');
+        this.permInterval = parseInt(chip.dataset.interval);
+        Nexus.refreshActive();
+      };
+    });
+
+    container.querySelector('#btn-clear').onclick = ()=>{
+      Nexus.filters.dateStart = null;
+      Nexus.filters.dateEnd   = null;
+      Nexus.filters.weekdays  = new Set([0,1,2,3,4,5,6]);
+      this.permInterval = 60;
+      this.renderFilters(container);
+      Nexus.refreshActive();
+    };
+  },
+
+  async _handleFiles(files){
+    const wrap = document.getElementById('progress-wrap');
+    const bar = document.getElementById('progress-bar');
+    wrap.style.display = 'block';
+    await Nexus.importFiles(files, pct=>{ bar.style.width = pct+'%'; });
+    setTimeout(()=>{ wrap.style.display='none'; bar.style.width='0%'; }, 600);
+    Nexus.refreshActive();
+  },
+
+  render(container){
+    const data = Nexus.filteredData;
+    const kpis = this._kpis(data);
+
+    container.innerHTML = `
+      <div class="kpi-grid">
+        <div class="kpi-card"><div class="lbl">Volume</div><div class="val">${kpis.volume}</div><div class="sub">pagamentos reais</div></div>
+        <div class="kpi-card"><div class="lbl">Permanência Média — Mês</div><div class="val">${kpis.permMes}</div><div class="sub">todos os dados carregados</div></div>
+        <div class="kpi-card"><div class="lbl">Permanência Média — Período</div><div class="val">${kpis.permPeriodo}</div><div class="sub">filtro selecionado</div></div>
+      </div>
+
+      <div class="panel" style="overflow:hidden;margin-bottom:14px;">
+        <h2>Distribuição permanência × dia da semana</h2>
+        <div id="perm-table-wrap"></div>
+      </div>
+
+    `;
+
+    this._renderCharts(data);
+
+  },
+
+  _kpis(data){
+    const pagos = data.filter(d => d.isPago);
+    // permanência média do PERÍODO FILTRADO
+    const permPeriodo = pagos.length
+      ? pagos.reduce((s,d) => s + d.permanenciaMin, 0) / pagos.length : 0;
+    // permanência média do MÊS COMPLETO (todos os dados carregados, sem filtro de data)
+    const todosOsMeses = Nexus.rawData.filter(d => d.isPago);
+    const permMes = todosOsMeses.length
+      ? todosOsMeses.reduce((s,d) => s + d.permanenciaMin, 0) / todosOsMeses.length : 0;
+    return {
+      volume: pagos.length.toLocaleString('pt-BR'),
+      permMes: this.minToHHMM(Math.round(permMes)),
+      permPeriodo: this.minToHHMM(Math.round(permPeriodo))
+    };
+  },
+
+  _renderCharts(data){
+    const pagos = data.filter(d => d.isPago);
+    const step = this.permInterval;
+    const maxMin = 24 * 60;
+
+    // Buckets: "Até HH:MM" — cada bucket cobre (prevMax+1) até m
+    const buckets = [];
+    let prevMax = -1;
+    for(let m = step; m <= maxMin; m += step){
+      buckets.push({ label: `Até ${this.minToHHMM(m)}`, min: prevMax+1, max: m });
+      prevMax = m;
+    }
+    // Acima de 24h: Até 48h, Até 72h...
+    for(let d = 2; d <= 8; d++){
+      buckets.push({ label: `Até ${d*24}h`, min: prevMax+1, max: d*1440 });
+      prevMax = d*1440;
+    }
+    // Catch-all: permanências acima de 192h (veículos esquecidos, erros de registro, etc.)
+    buckets.push({ label: `Acima de 192h`, min: prevMax+1, max: Infinity });
+
+    const days = [
+      {label:'Domingo', idx:0},
+      {label:'Segunda', idx:1},
+      {label:'Terça',   idx:2},
+      {label:'Quarta',  idx:3},
+      {label:'Quinta',  idx:4},
+      {label:'Sexta',   idx:5},
+      {label:'Sábado',  idx:6}
+    ];
+
+    // Monta matrix com totais — single-pass por bucket, usa diaPagamento pré-computado
+    const bucketMap = {};
+    buckets.forEach(b => {
+      bucketMap[b.label] = { label: b.label, counts: {} };
+      days.forEach(d => bucketMap[b.label].counts[d.idx] = 0);
+      bucketMap[b.label].counts.total = 0;
+    });
+
+    pagos.forEach(p => {
+      for(const b of buckets){
+        if(p.permanenciaMin >= b.min && p.permanenciaMin <= b.max){
+          bucketMap[b.label].counts[p.diaPagamento]++;
+          bucketMap[b.label].counts.total++;
+          break;
+        }
+      }
+    });
+
+    const matrix = buckets
+      .map(b => bucketMap[b.label])
+      .filter(r => r.counts.total > 0);
+
+    const grandTotal = matrix.reduce((s,r) => s + r.counts.total, 0);
+
+    // Acha os 2 maiores totais para destaque
+    const sortedTotals = matrix.map(r => r.counts.total).sort((a,b) => b - a);
+    const top1 = sortedTotals[0] || 0;
+    const top2 = sortedTotals[1] || 0;
+
+    const colTotals = {};
+    days.forEach(d => { colTotals[d.idx] = matrix.reduce((s,r) => s + r.counts[d.idx], 0); });
+    colTotals.total = grandTotal;
+
+    const v = n => n === 0
+      ? `<span style="color:var(--border)">-</span>`
+      : `<span>${n}</span>`;
+
+    const rowStyle = (total) => {
+      if(total === top1)  return `background:rgba(91,140,255,.18);`;
+      if(total === top2)  return `background:rgba(91,140,255,.09);`;
+      return ``;
+    };
+
+    const tableHTML = `
+      <div class="table-scroll">
+        <table style="font-size:12px;border-collapse:collapse;">
+          <thead>
+            <tr>
+              <th style="position:sticky;top:0;left:0;z-index:2;background:var(--panel2);padding:7px 10px;text-align:left;color:var(--muted);border-bottom:2px solid var(--border);white-space:nowrap;">Permanência</th>
+              ${days.map(d=>`<th style="position:sticky;top:0;background:var(--panel2);padding:7px 8px;text-align:center;color:var(--muted);border-bottom:2px solid var(--border);">${d.label}</th>`).join('')}
+              <th style="position:sticky;top:0;background:var(--panel2);padding:7px 10px;text-align:center;color:var(--accent);border-bottom:2px solid var(--border);">Total</th>
+              <th style="position:sticky;top:0;background:var(--panel2);padding:7px 10px;text-align:center;color:var(--accent2);border-bottom:2px solid var(--border);white-space:nowrap;">Participação %</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${matrix.map((r,i)=>{
+              const pct = grandTotal ? ((r.counts.total / grandTotal) * 100).toFixed(2) : '0.00';
+              const isTop = r.counts.total === top1 || r.counts.total === top2;
+              const baseStyle = i%2===0 ? 'background:var(--panel);' : 'background:var(--panel2);';
+              const highlightStyle = rowStyle(r.counts.total);
+              return `
+              <tr style="${highlightStyle || baseStyle}">
+                <td style="padding:5px 10px;color:var(--accent2);font-weight:600;white-space:nowrap;">${r.label}</td>
+                ${days.map(d=>`<td style="padding:5px 8px;text-align:center;">${v(r.counts[d.idx])}</td>`).join('')}
+                <td style="padding:5px 10px;text-align:center;font-weight:700;color:var(--text);">${r.counts.total}</td>
+                <td style="padding:5px 10px;text-align:center;font-weight:${isTop?'700':'400'};color:${isTop?'var(--warn)':'var(--muted)'};">${pct}%</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+          <tfoot>
+            <tr style="border-top:2px solid var(--border);">
+              <td style="padding:7px 10px;font-weight:700;color:var(--text);">Total</td>
+              ${days.map(d=>`<td style="padding:7px 8px;text-align:center;font-weight:700;color:var(--text);">${colTotals[d.idx]||'<span style="color:var(--border)">-</span>'}</td>`).join('')}
+              <td style="padding:7px 10px;text-align:center;font-weight:700;color:var(--accent);">${colTotals.total.toLocaleString('pt-BR')}</td>
+              <td style="padding:7px 10px;text-align:center;font-weight:700;color:var(--accent2);">100%</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>`;
+
+    document.getElementById('perm-table-wrap').innerHTML = tableHTML;
+
+  },
+};
+
+
+/* ======================================================================
+   MÓDULO RECEITA
+   ====================================================================== */
+const ModuloReceita = {
+  id: 'receita',
+  nome: 'Receita',
+  icon: '💰',
+  permInterval: 60,
+
+  minToHHMM(min){
+    const h = Math.floor(min / 60);
+    const m = Math.round(min % 60);
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  },
+
+  renderFilters(container){
+    container.innerHTML = `
+      <div class="filt-group">
+        <h3>Data inicial / final</h3>
+        <div class="filt-row">
+          <input type="date" id="f-start">
+          <input type="date" id="f-end">
+        </div>
+      </div>
+
+      <div class="filt-group">
+        <h3>Dias da semana</h3>
+        <div class="chip-row" id="weekday-chips">
+          ${['D','S','T','Q','Q','S','S'].map((d,i)=>`<div class="chip on" data-day="${[0,1,2,3,4,5,6][i]}">${d}</div>`).join('')}
+        </div>
+      </div>
+
+      <div class="filt-group">
+        <h3>Intervalo de permanência</h3>
+        <div class="chip-row" id="interval-chips">
+          <div class="chip" data-interval="30">30 min</div>
+          <div class="chip on" data-interval="60">1 hora</div>
+        </div>
+      </div>
+
+      <button class="quickbtn" id="btn-clear" style="margin-top:8px;color:var(--danger);border-color:var(--danger);">✕ Limpar filtros</button>
+    `;
+    this._bindFilters(container);
+  },
+
+  _bindFilters(container){
+    container.querySelector('#f-start').onchange = e=>{
+      Nexus.filters.dateStart = e.target.value ? new Date(e.target.value + 'T00:00:00-03:00') : null;
+      Nexus.refreshActive();
+    };
+    container.querySelector('#f-end').onchange = e=>{
+      Nexus.filters.dateEnd = e.target.value ? new Date(e.target.value + 'T23:59:59-03:00') : null;
+      Nexus.refreshActive();
+    };
+    container.querySelectorAll('#weekday-chips .chip').forEach(chip=>{
+      chip.onclick = ()=>{
+        const day = parseInt(chip.dataset.day);
+        chip.classList.toggle('on');
+        if(chip.classList.contains('on')) Nexus.filters.weekdays.add(day);
+        else Nexus.filters.weekdays.delete(day);
+        Nexus.refreshActive();
+      };
+    });
+    container.querySelectorAll('#interval-chips .chip').forEach(chip=>{
+      chip.onclick = ()=>{
+        container.querySelectorAll('#interval-chips .chip').forEach(c=>c.classList.remove('on'));
+        chip.classList.add('on');
+        this.permInterval = parseInt(chip.dataset.interval);
+        Nexus.refreshActive();
+      };
+    });
+    container.querySelector('#btn-clear').onclick = ()=>{
+      Nexus.filters.dateStart = null;
+      Nexus.filters.dateEnd   = null;
+      Nexus.filters.weekdays  = new Set([0,1,2,3,4,5,6]);
+      this.permInterval = 60;
+      this.renderFilters(container);
+      Nexus.refreshActive();
+    };
+  },
+
+  render(container){
+    const data = Nexus.filteredData.filter(d => d.isPago);
+    const kpis = this._kpis(data);
+
+    container.innerHTML = `
+      <div class="kpi-grid">
+        <div class="kpi-card"><div class="lbl">Receita Total</div><div class="val">R$ ${kpis.receitaTotal}</div><div class="sub">período selecionado</div></div>
+        <div class="kpi-card"><div class="lbl">Receita Média / Dia</div><div class="val">R$ ${kpis.mediaDia}</div></div>
+        <div class="kpi-card"><div class="lbl">Ticket Médio</div><div class="val">R$ ${kpis.ticketMedio}</div></div>
+        <div class="kpi-card"><div class="lbl">Volume</div><div class="val">${kpis.volume}</div><div class="sub">transações</div></div>
+        <div class="kpi-card"><div class="lbl">Melhor Dia</div><div class="val">R$ ${kpis.melhorDiaVal}</div><div class="sub">${kpis.melhorDiaData}</div></div>
+      </div>
+
+      <div class="panel" style="margin-bottom:14px;overflow:hidden;">
+        <h2>Receita (R$) × Permanência × Dia da semana</h2>
+        <div id="receita-perm-wrap"></div>
+      </div>
+
+      <div class="panel" style="margin-bottom:14px;overflow:hidden;">
+        <h2>Receita (R$) × Semana × Dia da semana</h2>
+        <div id="receita-semana-wrap"></div>
+      </div>
+
+    `;
+
+    this._renderCharts(data);
+
+  },
+
+  _kpis(data){
+    const receita = data.reduce((s,d)=>s+d.valorPago, 0);
+    // dias únicos com pelo menos 1 transação
+    const diasUnicos = new Set(data.map(d=>d.dataPagamentoStr));
+    const mediaDia = diasUnicos.size ? receita / diasUnicos.size : 0;
+    const ticket   = data.length ? receita / data.length : 0;
+
+    // melhor dia
+    const porDia = {};
+    data.forEach(d=>{
+      const k = d.dataPagamentoStr;
+      porDia[k] = (porDia[k]||0) + d.valorPago;
+    });
+    const melhor = Object.entries(porDia).sort((a,b)=>b[1]-a[1])[0] || ['—', 0];
+
+    const fmt = v => v.toLocaleString('pt-BR',{minimumFractionDigits:2, maximumFractionDigits:2});
+    return {
+      receitaTotal: fmt(receita),
+      mediaDia:     fmt(mediaDia),
+      ticketMedio:  fmt(ticket),
+      volume:       data.length.toLocaleString('pt-BR'),
+      melhorDiaVal: fmt(melhor[1]),
+      melhorDiaData: melhor[0]
+    };
+  },
+
+  _renderCharts(data){
+    const step = this.permInterval;
+    const maxMin = 24 * 60;
+    const days = [
+      {label:'Domingo',idx:0},{label:'Segunda',idx:1},{label:'Terça',idx:2},
+      {label:'Quarta',idx:3},{label:'Quinta',idx:4},{label:'Sexta',idx:5},{label:'Sábado',idx:6}
+    ];
+    const fmt = v => v===0 ? '<span style="color:var(--border)">-</span>'
+      : 'R$\u00a0'+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+
+    // ---- Tabela cruzada: Receita (R$) x Permanencia x Dia da semana ----
+    const buckets = [];
+    let prevMaxR = -1;
+    for(let m=step; m<=maxMin; m+=step){
+      buckets.push({ label: `Até ${this.minToHHMM(m)}`, min: prevMaxR+1, max: m });
+      prevMaxR = m;
+    }
+    for(let d=2; d<=8; d++){
+      buckets.push({ label: `Até ${d*24}h`, min: prevMaxR+1, max: d*1440 });
+      prevMaxR = d*1440;
+    }
+    // Catch-all: permanências acima de 192h (veículos esquecidos, erros de registro, etc.)
+    buckets.push({ label: `Acima de 192h`, min: prevMaxR+1, max: Infinity });
+
+    // Single-pass: acumula receita por bucket+dia de uma vez (evita O(n×buckets×days))
+    const bucketsMap = buckets.map(b => {
+      const vals = {}; days.forEach(d => vals[d.idx] = 0);
+      return { label: b.label, min: b.min, max: b.max, vals, total: 0 };
+    });
+    data.forEach(p => {
+      for(const row of bucketsMap){
+        if(p.permanenciaMin >= row.min && p.permanenciaMin <= row.max){
+          row.vals[p.diaPagamento] += p.valorPago;
+          row.total += p.valorPago;
+          break;
+        }
+      }
+    });
+    const matrixPerm = bucketsMap.filter(r => r.total > 0);
+    const grandTotalPerm=matrixPerm.reduce((s,r)=>s+r.total,0);
+    const colTotalsPerm={}; days.forEach(d=>{colTotalsPerm[d.idx]=matrixPerm.reduce((s,r)=>s+r.vals[d.idx],0);});
+    const sortedP=matrixPerm.map(r=>r.total).sort((a,b)=>b-a);
+    const top1P=sortedP[0]||0, top2P=sortedP[1]||0;
+    document.getElementById('receita-perm-wrap').innerHTML = `
+      <div class="table-scroll"><table style="font-size:12px;border-collapse:collapse;">
+        <thead><tr>
+          <th style="position:sticky;top:0;background:var(--panel2);padding:7px 10px;text-align:left;color:var(--muted);border-bottom:2px solid var(--border);white-space:nowrap;">Permanencia</th>
+          ${days.map(d=>`<th style="position:sticky;top:0;background:var(--panel2);padding:7px 8px;text-align:right;color:var(--muted);border-bottom:2px solid var(--border);">${d.label}</th>`).join('')}
+          <th style="position:sticky;top:0;background:var(--panel2);padding:7px 10px;text-align:right;color:var(--accent);border-bottom:2px solid var(--border);">Total</th>
+          <th style="position:sticky;top:0;background:var(--panel2);padding:7px 10px;text-align:center;color:var(--accent2);border-bottom:2px solid var(--border);">Part.%</th>
+        </tr></thead>
+        <tbody>${matrixPerm.map((r,i)=>{
+          const pct=grandTotalPerm?((r.total/grandTotalPerm)*100).toFixed(2):'0.00';
+          const isTop=r.total===top1P||r.total===top2P;
+          const bg=r.total===top1P?'background:rgba(91,140,255,.18);':r.total===top2P?'background:rgba(91,140,255,.09);':i%2===0?'background:var(--panel);':'background:var(--panel2);';
+          return `<tr style="${bg}"><td style="padding:5px 10px;color:var(--accent2);font-weight:600;white-space:nowrap;">${r.label}</td>${days.map(d=>`<td style="padding:5px 8px;text-align:right;">${fmt(r.vals[d.idx])}</td>`).join('')}<td style="padding:5px 10px;text-align:right;font-weight:700;color:var(--text);">${fmt(r.total)}</td><td style="padding:5px 10px;text-align:center;font-weight:${isTop?'700':'400'};color:${isTop?'var(--warn)':'var(--muted)'};">${pct}%</td></tr>`;
+        }).join('')}</tbody>
+        <tfoot><tr style="border-top:2px solid var(--border);"><td style="padding:7px 10px;font-weight:700;">Total</td>${days.map(d=>`<td style="padding:7px 8px;text-align:right;font-weight:700;color:var(--text);">${fmt(colTotalsPerm[d.idx])}</td>`).join('')}<td style="padding:7px 10px;text-align:right;font-weight:700;color:var(--accent);">${fmt(grandTotalPerm)}</td><td style="padding:7px 10px;text-align:center;font-weight:700;color:var(--accent2);">100%</td></tr></tfoot>
+      </table></div>`;
+
+    // ---- Tabela cruzada Receita x Semana x Dia da semana ----
+    // Single-pass O(n): acumula receita por semana+dia em um único forEach
+    const semanaMap = new Map(); // chave: semanaPagamentoStr → { vals, total }
+    data.forEach(d => {
+      const wk = d.semanaPagamentoStr;
+      if(!semanaMap.has(wk)){
+        const vals = {}; days.forEach(day => vals[day.idx] = 0);
+        semanaMap.set(wk, { label: wk, vals, total: 0 });
+      }
+      const row = semanaMap.get(wk);
+      row.vals[d.diaPagamento] += d.valorPago;
+      row.total += d.valorPago;
+    });
+    const matrix = [...semanaMap.values()].sort((a,b) => a.label.localeCompare(b.label));
+
+    const grandTotal = data.reduce((s,d)=>s+d.valorPago,0);
+
+    const colTotals = {};
+    days.forEach(d=>{ colTotals[d.idx]=matrix.reduce((s,r)=>s+r.vals[d.idx],0); });
+
+    const sortedTotals = matrix.map(r=>r.total).sort((a,b)=>b-a);
+    const top1=sortedTotals[0]||0, top2=sortedTotals[1]||0;
+
+    const fmtR = v => v===0 ? '<span style="color:var(--border)">-</span>'
+      : 'R$'+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+    document.getElementById('receita-semana-wrap').innerHTML = `
+      <div class="table-scroll">
+        <table style="width:100%;font-size:12px;border-collapse:collapse;">
+          <thead><tr>
+            <th style="position:sticky;top:0;background:var(--panel2);padding:7px 10px;text-align:left;color:var(--muted);border-bottom:2px solid var(--border);white-space:nowrap;">Semana</th>
+            ${days.map(d=>`<th style="position:sticky;top:0;background:var(--panel2);padding:7px 8px;text-align:right;color:var(--muted);border-bottom:2px solid var(--border);">${d.label}</th>`).join('')}
+            <th style="position:sticky;top:0;background:var(--panel2);padding:7px 10px;text-align:right;color:var(--accent);border-bottom:2px solid var(--border);">Total</th>
+            <th style="position:sticky;top:0;background:var(--panel2);padding:7px 10px;text-align:center;color:var(--accent2);border-bottom:2px solid var(--border);white-space:nowrap;">Part. %</th>
+          </tr></thead>
+          <tbody>
+            ${matrix.map((r,i)=>{
+              const pct = grandTotal ? ((r.total/grandTotal)*100).toFixed(2) : '0.00';
+              const isTop = r.total===top1||r.total===top2;
+              const bg = isTop
+                ? (r.total===top1?'background:rgba(91,140,255,.18);':'background:rgba(91,140,255,.09);')
+                : (i%2===0?'background:var(--panel);':'background:var(--panel2);');
+              return `<tr style="${bg}">
+                <td style="padding:5px 10px;color:var(--accent2);font-weight:600;white-space:nowrap;">${r.label}</td>
+                ${days.map(d=>`<td style="padding:5px 8px;text-align:right;">${fmtR(r.vals[d.idx])}</td>`).join('')}
+                <td style="padding:5px 10px;text-align:right;font-weight:700;color:var(--text);">${fmtR(r.total)}</td>
+                <td style="padding:5px 10px;text-align:center;font-weight:${isTop?'700':'400'};color:${isTop?'var(--warn)':'var(--muted)'};">${pct}%</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+          <tfoot><tr style="border-top:2px solid var(--border);">
+            <td style="padding:7px 10px;font-weight:700;">Total</td>
+            ${days.map(d=>`<td style="padding:7px 8px;text-align:right;font-weight:700;color:var(--text);">${fmtR(colTotals[d.idx])}</td>`).join('')}
+            <td style="padding:7px 10px;text-align:right;font-weight:700;color:var(--accent);">${fmtR(grandTotal)}</td>
+            <td style="padding:7px 10px;text-align:center;font-weight:700;color:var(--accent2);">100%</td>
+          </tr></tfoot>
+        </table>
+      </div>`;
+  },
+
+};
+
+/* ======================================================================
+   MÓDULO CANCELADOS
+   Acompanhamento de cancelamentos reais (exclui baixas automáticas do
+   sistema — ADMIN / USUÁRIO AUTOMÁTICO — que representam ~98% dos
+   registros CANCELADO no relatório-modelo, mas não são eventos de
+   negócio: valor R$0,00, sem observação. Confirmado com o gestor:
+   registros restantes ainda precisam de valor > 0 para entrar no módulo.
+   ====================================================================== */
+const ModuloCancelados = {
+  id: 'cancelados',
+  nome: 'Cancelados',
+  icon: '🚫',
+  _page: 0,
+  _pageSize: 50,
+  _all: [],
+  _filtered: [],
+
+  renderFilters(container){
+    container.innerHTML = `
+      <div class="filt-group">
+        <h3>Data inicial / final</h3>
+        <div class="filt-row">
+          <input type="date" id="f-start">
+          <input type="date" id="f-end">
+        </div>
+      </div>
+
+      <div class="filt-group">
+        <h3>Dias da semana</h3>
+        <div class="chip-row" id="weekday-chips">
+          ${['D','S','T','Q','Q','S','S'].map((d,i)=>`<div class="chip on" data-day="${[0,1,2,3,4,5,6][i]}">${d}</div>`).join('')}
+        </div>
+      </div>
+
+      <button class="quickbtn" id="btn-clear" style="margin-top:8px;color:var(--danger);border-color:var(--danger);">✕ Limpar filtros</button>
+    `;
+    this._bindFilters(container);
+  },
+
+  _bindFilters(container){
+    container.querySelector('#f-start').onchange = e=>{
+      Nexus.filters.dateStart = e.target.value ? new Date(e.target.value + 'T00:00:00-03:00') : null;
+      Nexus.refreshActive();
+    };
+    container.querySelector('#f-end').onchange = e=>{
+      Nexus.filters.dateEnd = e.target.value ? new Date(e.target.value + 'T23:59:59-03:00') : null;
+      Nexus.refreshActive();
+    };
+    container.querySelectorAll('#weekday-chips .chip').forEach(chip=>{
+      chip.onclick = ()=>{
+        const day = parseInt(chip.dataset.day);
+        chip.classList.toggle('on');
+        if(chip.classList.contains('on')) Nexus.filters.weekdays.add(day);
+        else Nexus.filters.weekdays.delete(day);
+        Nexus.refreshActive();
+      };
+    });
+    container.querySelector('#btn-clear').onclick = ()=>{
+      Nexus.filters.dateStart = null;
+      Nexus.filters.dateEnd   = null;
+      Nexus.filters.weekdays  = new Set([0,1,2,3,4,5,6]);
+      this.renderFilters(container);
+      Nexus.refreshActive();
+    };
+  },
+
+  // Remove acentos e uppercase — usado tanto na exclusão de usuário quanto na busca
+  _norm(str){
+    return String(str||'').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  },
+
+  _isUsuarioSistema(usuario){
+    const u = this._norm(usuario);
+    return u === 'ADMIN' || u === 'USUARIO AUTOMATICO';
+  },
+
+  // Regra de negócio confirmada: status cancelado + operador humano (exclui
+  // ADMIN/USUÁRIO AUTOMÁTICO) + valor > 0. Consome Nexus.filteredData, que já
+  // respeita o filtro de data/dia da semana ativo no cabeçalho.
+  getFilteredCanceladosData(){
+    return Nexus.filteredData.filter(d =>
+      d.status === 'cancelado'
+      && !this._isUsuarioSistema(d.usuarioPagamento)
+      && d.valorPago > 0
+    );
+  },
+
+  render(container){
+    const pagos      = Nexus.filteredData.filter(d => d.isPago);
+    const cancelados = this.getFilteredCanceladosData();
+    this._all      = cancelados;
+    this._filtered = cancelados;
+    this._page     = 0;
+
+    const fmtR = v => 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+    const volumeReal     = pagos.length;
+    const receitaReal    = pagos.reduce((s,d)=>s+d.valorPago, 0);
+    const totalCancel    = cancelados.length;
+    const pctCancel      = volumeReal ? ((totalCancel/volumeReal)*100).toFixed(2) : '0.00';
+    const receitaPerdida = cancelados.reduce((s,d)=>s+d.valorPago, 0);
+
+    // Distribuição por operador (single-pass, mesmo padrão dos demais módulos)
+    const porOperador = new Map();
+    cancelados.forEach(d=>{
+      const op = d.usuarioPagamento || 'N/D';
+      if(!porOperador.has(op)) porOperador.set(op, { qtd:0, valor:0 });
+      const r = porOperador.get(op);
+      r.qtd   += 1;
+      r.valor += d.valorPago;
+    });
+    const operadoresSort = [...porOperador.entries()].sort((a,b)=>b[1].qtd-a[1].qtd);
+
+    container.innerHTML = `
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="lbl">Volume Atendido Real</div>
+          <div class="val">${volumeReal.toLocaleString('pt-BR')}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="lbl">Receita Total Real</div>
+          <div class="val">${fmtR(receitaReal)}</div>
+        </div>
+        <div class="kpi-card" style="border-left:3px solid var(--danger);">
+          <div class="lbl">Total de Cancelamentos</div>
+          <div class="val">${totalCancel.toLocaleString('pt-BR')}</div>
+          <div class="sub" style="color:var(--danger);">${pctCancel}% do volume real</div>
+        </div>
+        <div class="kpi-card" style="border-left:3px solid var(--warn);">
+          <div class="lbl">Receita Perdida Estimada</div>
+          <div class="val" style="color:var(--warn);">${fmtR(receitaPerdida)}</div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-bottom:14px;overflow:hidden;">
+        <h2>Distribuição por Operador</h2>
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead><tr><th>Operador</th><th>Qtd. Cancelamentos</th><th>Valor Total Perdido</th><th>% do Total</th></tr></thead>
+            <tbody>
+              ${operadoresSort.map(([op,r])=>`
+                <tr>
+                  <td>${esc(op)}</td>
+                  <td>${r.qtd}</td>
+                  <td>${fmtR(r.valor)}</td>
+                  <td>${totalCancel ? ((r.qtd/totalCancel)*100).toFixed(1) : '0.0'}%</td>
+                </tr>`).join('') || `<tr><td colspan="4" style="color:var(--muted);">Nenhum cancelamento no período</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel" style="overflow:hidden;">
+        <h2>Tickets Cancelados</h2>
+        <input type="text" id="cancelados-search" placeholder="Buscar por Placa, Ticket ou Operador..."
+          style="width:100%;max-width:340px;padding:8px 12px;margin-bottom:12px;background:var(--panel2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:13px;">
+        <div id="cancelados-table-wrap"></div>
+      </div>
+    `;
+
+    // Busca rápida: filtra só as linhas renderizadas, sem reprocessar os KPIs acima
+    container.querySelector('#cancelados-search').oninput = e=>{
+      const q = this._norm(e.target.value);
+      this._filtered = !q ? this._all : this._all.filter(d=>
+        this._norm(d.placa+' '+d.ticket+' '+d.usuarioPagamento).includes(q)
+      );
+      this._page = 0;
+      this._renderTable();
+    };
+
+    this._renderTable();
+  },
+
+  _renderTable(){
+    const wrap = document.getElementById('cancelados-table-wrap');
+    if(!wrap) return;
+
+    const fmtR = v => 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const fmtDataHora = ts => ts ? ts.toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo', day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'}) : '-';
+
+    const totalPages = Math.max(1, Math.ceil(this._filtered.length / this._pageSize));
+    this._page = Math.min(this._page, totalPages - 1);
+    const slice = this._filtered.slice(this._page*this._pageSize, this._page*this._pageSize + this._pageSize);
+
+    wrap.innerHTML = `
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr><th>Ticket</th><th>Placa</th><th>Operador</th><th>Data/Hora Cancelamento</th><th>Valor</th><th>Ações</th></tr>
+          </thead>
+          <tbody>
+            ${slice.map(d=>`
+              <tr>
+                <td>${esc(d.ticket)}</td>
+                <td>${esc(d.placa || '-')}</td>
+                <td>${esc(d.usuarioPagamento || '-')}</td>
+                <td>${fmtDataHora(d.timestampPagamento)}</td>
+                <td>${fmtR(d.valorPago)}</td>
+                <td><button class="btn-edit-sm" onclick="ModuloCancelados.showDetail('${esc(d.id)}')">Detalhes</button></td>
+              </tr>`).join('') || `<tr><td colspan="6" style="color:var(--muted);">Nenhum registro encontrado</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+      ${this._filtered.length > this._pageSize ? `
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:10px;font-size:12px;color:var(--muted);">
+        <button class="quickbtn" id="cancelados-prev" ${this._page===0 ? 'disabled' : ''}>‹ Anterior</button>
+        <span>Página ${this._page+1} de ${totalPages}</span>
+        <button class="quickbtn" id="cancelados-next" ${this._page>=totalPages-1 ? 'disabled' : ''}>Próxima ›</button>
+      </div>` : ''}
+    `;
+
+    const prevBtn = document.getElementById('cancelados-prev');
+    const nextBtn = document.getElementById('cancelados-next');
+    if(prevBtn) prevBtn.onclick = ()=>{ this._page--; this._renderTable(); };
+    if(nextBtn) nextBtn.onclick = ()=>{ this._page++; this._renderTable(); };
+  },
+
+  // Modal ad-hoc — o app não possui um #modal-container genérico; segue o
+  // mesmo padrão de overlay usado no modal de Tabela de Tarifas.
+  showDetail(id){
+    const d = this._all.find(x=>x.id===id) || this._filtered.find(x=>x.id===id);
+    if(!d) return;
+
+    const fmtR = v => 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const fmtDataHora = ts => ts ? ts.toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo', day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'}) : '-';
+    const linha = (label, valor) => `
+      <div style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);">
+        <span style="color:var(--muted);font-size:12px;">${label}</span>
+        <span style="font-size:13px;text-align:right;">${valor}</span>
+      </div>`;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-cancelado-detalhe';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px;';
+    overlay.innerHTML = `
+      <div style="background:var(--panel);border-radius:14px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;padding:24px;box-shadow:0 8px 40px rgba(0,0,0,.5);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <h2 style="margin:0;font-size:16px;">🚫 Detalhes do Cancelamento</h2>
+          <button id="modal-fechar" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:0 4px;">✕</button>
+        </div>
+        ${linha('Número do Ticket', esc(d.ticket))}
+        ${linha('Placa do Veículo', esc(d.placa || '-'))}
+        ${linha('Operador Responsável', esc(d.usuarioPagamento || '-'))}
+        ${linha('Data e Hora de Entrada', fmtDataHora(d.timestampEntrada))}
+        ${linha('Data e Hora do Cancelamento', fmtDataHora(d.timestampPagamento))}
+        ${linha('Valor do Ticket', fmtR(d.valorPago))}
+        ${linha('Nome do Cliente', esc(d.nomeCliente || '-'))}
+        <div style="padding-top:10px;">
+          <div style="color:var(--muted);font-size:12px;margin-bottom:4px;">Motivo / Observações</div>
+          <div style="font-size:13px;line-height:1.5;">${esc(d.detalhe) || 'Sem observações registradas.'}</div>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const fechar = () => overlay.remove();
+    overlay.querySelector('#modal-fechar').onclick = fechar;
+    overlay.onclick = e => { if(e.target === overlay) fechar(); };
+  },
+};
+
+/* ---------------- registro dos módulos ---------------- */
+/* ======================================================================
+   MÓDULO PAGAMENTOS
+   ====================================================================== */
+const ModuloPagamentos = {
+  id: 'pagamentos',
+  nome: 'Pagamentos',
+  icon: '💳',
+
+  renderFilters(container){
+    container.innerHTML = `
+      <div class="filt-group">
+        <h3>Data inicial / final</h3>
+        <div class="filt-row">
+          <input type="date" id="f-start">
+          <input type="date" id="f-end">
+        </div>
+      </div>
+      <div class="filt-group">
+        <h3>Dias da semana</h3>
+        <div class="chip-row" id="weekday-chips">
+          ${['D','S','T','Q','Q','S','S'].map((d,i)=>`<div class="chip on" data-day="${[0,1,2,3,4,5,6][i]}">${d}</div>`).join('')}
+        </div>
+      </div>
+      <button class="quickbtn" id="btn-clear" style="margin-top:8px;color:var(--danger);border-color:var(--danger);">✕ Limpar filtros</button>
+    `;
+    this._bindFilters(container);
+  },
+
+  _bindFilters(container){
+    container.querySelector('#f-start').onchange = e=>{
+      Nexus.filters.dateStart = e.target.value ? new Date(e.target.value + 'T00:00:00-03:00') : null;
+      Nexus.refreshActive();
+    };
+    container.querySelector('#f-end').onchange = e=>{
+      Nexus.filters.dateEnd = e.target.value ? new Date(e.target.value + 'T23:59:59-03:00') : null;
+      Nexus.refreshActive();
+    };
+    container.querySelectorAll('#weekday-chips .chip').forEach(chip=>{
+      chip.onclick = ()=>{
+        const day = parseInt(chip.dataset.day);
+        chip.classList.toggle('on');
+        if(chip.classList.contains('on')) Nexus.filters.weekdays.add(day);
+        else Nexus.filters.weekdays.delete(day);
+        Nexus.refreshActive();
+      };
+    });
+    container.querySelector('#btn-clear').onclick = ()=>{
+      Nexus.filters.dateStart = null;
+      Nexus.filters.dateEnd   = null;
+      Nexus.filters.weekdays  = new Set([0,1,2,3,4,5,6]);
+      this.renderFilters(container);
+      Nexus.refreshActive();
+    };
+  },
+
+  render(container){
+    const data = Nexus.filteredData.filter(d => d.isPago);
+
+    // --- Agrupa por forma de pagamento ---
+    const formas = {};
+    data.forEach(d=>{
+      if(!formas[d.formaPagamento]) formas[d.formaPagamento] = { receita:0, volume:0 };
+      formas[d.formaPagamento].receita += d.valorPago;
+      formas[d.formaPagamento].volume  += 1;
+    });
+    const totalReceita = Object.values(formas).reduce((s,f)=>s+f.receita, 0);
+    const formasSort = Object.entries(formas).sort((a,b)=>b[1].receita-a[1].receita);
+
+    const fmtR = v => 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const COLORS = ['#5b8cff','#22d3a5','#ffb454','#ff6b6b','#a78bfa','#38bdf8','#fb923c','#4ade80','#f472b6','#34d399'];
+
+    container.innerHTML = `
+      <!-- Cards por forma de pagamento -->
+      <div class="kpi-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));">
+        ${formasSort.map(([forma, f], i)=>{
+          const pct = totalReceita ? ((f.receita/totalReceita)*100).toFixed(1) : '0.0';
+          const cor = COLORS[i % COLORS.length];
+          return `
+          <div class="kpi-card" style="border-left:3px solid ${cor};">
+            <div class="lbl" style="color:${cor};">${forma}</div>
+            <div class="val" style="font-size:18px;">${fmtR(f.receita)}</div>
+            <div style="display:flex;justify-content:space-between;margin-top:4px;">
+              <span style="font-size:11px;color:var(--muted);">${f.volume.toLocaleString('pt-BR')} transações</span>
+              <span style="font-size:11px;font-weight:700;color:var(--accent2);">${pct}%</span>
+            </div>
+          </div>`;
+        }).join('') || '<div class="kpi-card"><div class="lbl">Aguardando dados</div></div>'}
+      </div>
+
+      <!-- Tabela cruzada: Receita × Forma × Semana -->
+      <div class="panel" style="overflow:hidden;">
+        <h2>Receita (R$) × Forma de pagamento × Semana</h2>
+        <div id="pag-semana-wrap"></div>
+      </div>
+    `;
+
+    this._renderCharts(data, formasSort, totalReceita, COLORS);
+
+  },
+
+  _renderCharts(data, formasSort, totalReceita, COLORS){
+
+    // ---- Tabela cruzada: Receita × Forma × Semana ----
+    // Single-pass O(n): acumula receita por semana+forma em um único forEach
+    const allFormas = formasSort.map(([f])=>f);
+    const semanaMap = new Map(); // chave: semanaPagamentoStr → { vals, total }
+    data.forEach(d => {
+      const wk = d.semanaPagamentoStr;
+      if(!semanaMap.has(wk)){
+        const vals = {}; allFormas.forEach(f => vals[f] = 0);
+        semanaMap.set(wk, { label: wk, vals, total: 0 });
+      }
+      const row = semanaMap.get(wk);
+      row.vals[d.formaPagamento] = (row.vals[d.formaPagamento] || 0) + d.valorPago;
+      row.total += d.valorPago;
+    });
+    const matrix = [...semanaMap.values()]
+      .filter(r => r.total > 0)
+      .sort((a,b) => a.label.localeCompare(b.label));
+
+    const grandTotal = matrix.reduce((s,r)=>s+r.total,0);
+    const fmt = v => v===0
+      ? '<span style="color:var(--border)">-</span>'
+      : 'R$&nbsp;'+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const colTotals={};
+    allFormas.forEach(f=>{ colTotals[f]=matrix.reduce((s,r)=>s+(r.vals[f]||0),0); });
+    const sortedT=matrix.map(r=>r.total).sort((a,b)=>b-a);
+    const top1=sortedT[0]||0, top2=sortedT[1]||0;
+
+    document.getElementById('pag-semana-wrap').innerHTML = `
+      <div class="table-scroll">
+        <table style="width:100%;font-size:12px;border-collapse:collapse;">
+          <thead><tr>
+            <th style="position:sticky;top:0;left:0;z-index:2;background:var(--panel2);padding:7px 10px;text-align:left;color:var(--muted);border-bottom:2px solid var(--border);white-space:nowrap;">Semana</th>
+            ${allFormas.map(f=>`<th style="position:sticky;top:0;background:var(--panel2);padding:7px 8px;text-align:right;color:var(--muted);border-bottom:2px solid var(--border);white-space:nowrap;">${f}</th>`).join('')}
+            <th style="position:sticky;top:0;background:var(--panel2);padding:7px 10px;text-align:right;color:var(--accent);border-bottom:2px solid var(--border);">Total</th>
+            <th style="position:sticky;top:0;background:var(--panel2);padding:7px 10px;text-align:center;color:var(--accent2);border-bottom:2px solid var(--border);">Part.%</th>
+          </tr></thead>
+          <tbody>
+            ${matrix.map((r,i)=>{
+              const pct=grandTotal?((r.total/grandTotal)*100).toFixed(2):'0.00';
+              const isTop=r.total===top1||r.total===top2;
+              const bg=r.total===top1?'background:rgba(91,140,255,.18);':r.total===top2?'background:rgba(91,140,255,.09);':i%2===0?'background:var(--panel);':'background:var(--panel2);';
+              return `<tr style="${bg}">
+                <td style="padding:5px 10px;color:var(--accent2);font-weight:600;white-space:nowrap;">${r.label}</td>
+                ${allFormas.map(f=>`<td style="padding:5px 8px;text-align:right;">${fmt(r.vals[f]||0)}</td>`).join('')}
+                <td style="padding:5px 10px;text-align:right;font-weight:700;color:var(--text);">${fmt(r.total)}</td>
+                <td style="padding:5px 10px;text-align:center;font-weight:${isTop?'700':'400'};color:${isTop?'var(--warn)':'var(--muted)'};">${pct}%</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+          <tfoot><tr style="border-top:2px solid var(--border);">
+            <td style="padding:7px 10px;font-weight:700;color:var(--text);">Total</td>
+            ${allFormas.map(f=>`<td style="padding:7px 8px;text-align:right;font-weight:700;color:var(--text);">${fmt(colTotals[f]||0)}</td>`).join('')}
+            <td style="padding:7px 10px;text-align:right;font-weight:700;color:var(--accent);">${fmt(grandTotal)}</td>
+            <td style="padding:7px 10px;text-align:center;font-weight:700;color:var(--accent2);">100%</td>
+          </tr></tfoot>
+        </table>
+      </div>`;
+  }
+};
+
+/* ======================================================================
+   MÓDULO RELATÓRIOS — Gestão dos arquivos importados
+   ====================================================================== */
+const ModuloRelatorios = {
+  id: 'relatorios',
+  nome: 'Relatórios',
+  icon: '📑',
+
+  renderFilters(container){ container.innerHTML = ''; },
+
+  render(container){
+    const filial = Nexus._filialAtual || null;
+    const total  = Nexus.rawData.length;
+    const pagos  = Nexus.rawData.filter(d => d.status==='pago' && d.valorPago>0).length;
+    const canc   = Nexus.rawData.filter(d => d.status==='cancelado').length;
+
+    container.innerHTML = `
+      <!-- Cabeçalho da filial -->
+      ${filial ? `
+      <div style="background:var(--panel);border:1px solid var(--accent);border-radius:10px;padding:16px 20px;margin-bottom:16px;display:flex;align-items:center;gap:24px;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Filial</div>
+          <div style="font-size:18px;font-weight:700;color:var(--text);">${esc(filial.nome)}</div>
+        </div>
+        ${filial.supervisor ? `<div>
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Supervisor</div>
+          <div style="font-size:15px;font-weight:600;color:var(--accent2);">${esc(filial.supervisor)}</div>
+        </div>` : ''}
+        ${filial.gestor ? `<div>
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Gestor</div>
+          <div style="font-size:15px;font-weight:600;color:var(--accent2);">${esc(filial.gestor)}</div>
+        </div>` : ''}
+        ${filial.naoEncontrada ? `<div style="font-size:12px;color:var(--warn);margin-left:auto;">⚠️ Filial não encontrada no cadastro</div>` : ''}
+      </div>` : ''}
+
+      <!-- Área de importação -->
+      <div id="drop-zone">
+        <div style="font-size:28px;">📂</div>
+        <div style="font-weight:600;margin-top:6px;">
+          ${total > 0 ? 'Importar novo relatório (substituirá o atual)' : 'Toque para selecionar ou arraste seu relatório aqui'}
+        </div>
+        <div style="font-size:11px;margin-top:4px;color:var(--muted);">XLSX · XLS · CSV</div>
+        <input type="file" id="file-input" accept=".csv,.xlsx,.xls" style="display:none;">
+        <div id="progress-wrap"><div id="progress-bar"></div></div>
+      </div>
+
+      <!-- KPIs -->
+      ${total > 0 ? `
+      <div class="kpi-grid" style="margin-bottom:16px;">
+        <div class="kpi-card"><div class="lbl">Total de registros</div><div class="val">${total.toLocaleString('pt-BR')}</div></div>
+        <div class="kpi-card"><div class="lbl">Pagamentos reais</div><div class="val">${pagos.toLocaleString('pt-BR')}</div></div>
+        <div class="kpi-card"><div class="lbl">Cancelamentos</div><div class="val">${canc.toLocaleString('pt-BR')}</div></div>
+      </div>
+
+      <div class="panel" style="border:1px solid var(--danger);">
+        <h2 style="color:var(--danger);">⚠️ Remover relatório</h2>
+        <p style="font-size:13px;color:var(--muted);margin:0 0 14px;">
+          Remove o relatório atual e zera todos os dados carregados. Os módulos voltarão ao estado inicial.
+        </p>
+        <button id="btn-limpar-tudo" style="background:var(--danger);color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+          🗑️ Remover relatório
+        </button>
+      </div>` : `
+      <div class="panel">
+        <p style="color:var(--muted);font-size:13px;margin:0;">Nenhum relatório carregado. Importe um arquivo acima para começar.</p>
+      </div>`}
+    `;
+
+    // Drop-zone
+    const dropZone = container.querySelector('#drop-zone');
+    const fileInput = container.querySelector('#file-input');
+    dropZone.onclick = ()=> fileInput.click();
+    ['dragover','dragleave','drop'].forEach(evt=>{
+      dropZone.addEventListener(evt, e=>{
+        e.preventDefault();
+        dropZone.classList.toggle('drag', evt==='dragover');
+      });
+    });
+    dropZone.addEventListener('drop', e=> this._handleImport(e.dataTransfer.files));
+    fileInput.onchange = e=> this._handleImport(e.target.files);
+
+    // Limpar
+    container.querySelector('#btn-limpar-tudo')?.addEventListener('click', async ()=>{
+      if(!confirm('Remover o relatório atual?\n\nTodos os dados serão apagados e os módulos voltarão ao estado inicial.')) return;
+      await NexusDB.clear();
+      Nexus.rawData = [];
+      Nexus.filteredData = [];
+      Nexus._filialAtual = null;
+      Nexus.applyFilters();
+      this.render(container);
+    });
+  },
+
+  async _handleImport(files){
+    if(!files || !files.length) return;
+
+    // Alerta se já houver dados carregados
+    if(Nexus.rawData.length > 0){
+      if(!confirm('Já existe um relatório carregado.\n\nAo continuar, os dados atuais serão substituídos pelo novo relatório.\n\nDeseja continuar?')) return;
+      Nexus.rawData = [];
+      Nexus.filteredData = [];
+      Nexus._filialAtual = null;
+    }
+
+    const wrap = document.getElementById('progress-wrap');
+    const bar  = document.getElementById('progress-bar');
+    wrap.style.display = 'block';
+    bar.style.width = '0%';
+
+    await Nexus.importFiles(files, pct=>{ bar.style.width = pct+'%'; });
+
+    // Detecta filial pelo código da garagem no cabeçalho do relatório
+    await this._detectarFilial(files[0]);
+
+    setTimeout(()=>{ wrap.style.display='none'; bar.style.width='0%'; }, 600);
+    Nexus.applyFilters();
+
+    // Persiste no IndexedDB — sobrescreve slot único (sem acúmulo)
+    await NexusDB.save();
+
+    // Re-renderiza o módulo com os novos dados
+    const container = document.getElementById('module-view');
+    this.render(container);
+  },
+
+  async _detectarFilial(file){
+    try {
+      // Lê o cabeçalho do arquivo para extrair o código da garagem
+      const buf = await file.arrayBuffer();
+      const wb  = XLSX.read(buf, { type: 'array' });
+      const ws  = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', range:0 });
+
+      let codigoGaragem = null;
+      for(let i = 0; i < Math.min(10, rows.length); i++){
+        const row = rows[i];
+        for(let j = 0; j < row.length; j++){
+          const val = String(row[j]||'').trim();
+          // Linha com "Código da Garagem: 000887"
+          if(val.toLowerCase().includes('código da garagem') || val.toLowerCase().includes('codigo da garagem')){
+            // Pega o valor na próxima célula ou extrai do texto
+            const match = val.match(/:\s*(\d{4,9})/);
+            if(match) { codigoGaragem = match[1].replace(/^0+/,'').padStart(6,'0'); break; }
+            if(row[j+1]) { codigoGaragem = String(row[j+1]).trim().padStart(6,'0'); break; }
+          }
+          // Ou a célula seguinte tem só o código
+          if(val === 'Código da Garagem:' && row[j+1]){
+            codigoGaragem = String(row[j+1]).trim().padStart(6,'0');
+            break;
+          }
+        }
+        if(codigoGaragem) break;
+      }
+
+      if(!codigoGaragem){
+        Nexus._filialAtual = { nome: file.name, supervisor: null, gestor: null, naoEncontrada: true };
+        return;
+      }
+
+      // Busca no Supabase pelo código da garagem
+      const { data: filial } = await supa
+        .from('na_filiais')
+        .select('nome, na_supervisores(nome, na_gestores(nome))')
+        .eq('codigo_garagem', codigoGaragem)
+        .single();
+
+      if(filial){
+        Nexus._filialAtual = {
+          nome: filial.nome,
+          supervisor: filial.na_supervisores?.nome || null,
+          gestor: filial.na_supervisores?.na_gestores?.nome || null,
+          naoEncontrada: false
+        };
+      } else {
+        Nexus._filialAtual = {
+          nome: `Garagem ${codigoGaragem}`,
+          supervisor: null, gestor: null, naoEncontrada: true
+        };
+      }
+    } catch(e){
+      console.warn('Erro ao detectar filial:', e);
+      Nexus._filialAtual = null;
+    }
+  }
+};
+
+
+/* ======================================================================
+   SUPABASE — CLIENTE
+   ====================================================================== */
+const SUPA_URL = 'https://mscpgtevmiznhdoolsat.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zY3BndGV2bWl6bmhkb29sc2F0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4OTQyMzIsImV4cCI6MjA5NzQ3MDIzMn0._-z-uVc9kbCwctIchnk4oNwQXumUL1h6pkatLRdD3Is';
+const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+// Sanitização contra XSS — use em TODO dado vindo do banco antes de injetar em innerHTML
+const esc = (str) => String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+/* ======================================================================
+   TABELAS DE PREÇO — utilitários de aplicabilidade e cálculo
+   Estrutura por tabela (armazenada em na_filiais.tabelas_preco, array):
+   { id, nome, diasSemana:['TODOS']|['SEG',...], horarioInicio:'HH:MM',
+     horarioFim:'HH:MM', toleranciaMinutos, tipoCobranca:'FIXO'|'PROGRESSIVO',
+     valorFixo, tetoDiaria, faixas:[{ateMinutos,valor}], fracaoMin, fracaoValor }
+   ====================================================================== */
+const DIAS_SEMANA_SIGLAS = ['DOM','SEG','TER','QUA','QUI','SEX','SAB'];
+
+// Verifica se uma tabela se aplica a um determinado instante de ENTRADA do veículo.
+// Critério de precedência entre tabelas que "batem": ordem de cadastro no array
+// (a primeira tabela do array que aplicar é a usada) — decisão confirmada com PTK.
+function tabelaAplicavel(tabela, dataEntrada){
+  if(!tabela || !dataEntrada) return false;
+
+  const diaSigla = DIAS_SEMANA_SIGLAS[dataEntrada.getDay()];
+  const diaOk = (tabela.diasSemana||[]).includes('TODOS') || (tabela.diasSemana||[]).includes(diaSigla);
+  if(!diaOk) return false;
+
+  const [hIni, mIni] = String(tabela.horarioInicio||'00:00').split(':').map(Number);
+  const [hFim, mFim] = String(tabela.horarioFim||'23:59').split(':').map(Number);
+  const minIni = hIni*60 + mIni;
+  const minFim = hFim*60 + mFim;
+  const minEntrada = dataEntrada.getHours()*60 + dataEntrada.getMinutes();
+
+  // Janela cruza a meia-noite (ex: 18:30 às 06:00)
+  if(minFim < minIni) return minEntrada >= minIni || minEntrada <= minFim;
+  return minEntrada >= minIni && minEntrada <= minFim;
+}
+
+// Retorna a primeira tabela aplicável de uma lista, dado o instante de entrada.
+function encontrarTabelaAplicavel(tabelasPreco, dataEntrada){
+  return (tabelasPreco||[]).find(t => tabelaAplicavel(t, dataEntrada)) || null;
+}
+
+// Regra de tolerância (não-negociável): se permanência <= tolerância, valor = 0.
+// Se ultrapassar, cobra pelo tempo INTEGRAL desde o minuto 0 — sem abater a tolerância.
+function calcularValorTabela(tabela, permanenciaMinutos){
+  if(!tabela) return 0;
+  const tolerancia = tabela.toleranciaMinutos || 0;
+  if(permanenciaMinutos <= tolerancia) return 0;
+
+  if(tabela.tipoCobranca === 'FIXO'){
+    return tabela.valorFixo || 0;
+  }
+
+  // PROGRESSIVO — mesma lógica de faixas + fração do modelo "Tabela Complexa" atual
+  const faixas = [...(tabela.faixas||[])].sort((a,b)=>a.ateMinutos-b.ateMinutos);
+  let valor = 0, ultimaAteMin = 0, encaixou = false;
+  for(const fx of faixas){
+    if(permanenciaMinutos <= fx.ateMinutos){ valor = fx.valor; encaixou = true; break; }
+    ultimaAteMin = fx.ateMinutos;
+    valor = fx.valor;
+  }
+  if(!encaixou && tabela.fracaoMin > 0){
+    const excedente = permanenciaMinutos - ultimaAteMin;
+    const blocos = Math.ceil(excedente / tabela.fracaoMin);
+    valor += blocos * (tabela.fracaoValor || 0);
+  }
+  if(tabela.tetoDiaria > 0) valor = Math.min(valor, tabela.tetoDiaria);
+  return valor;
+}
+
+// Migra o formato antigo { carro:{...}, moto:{...} } para o novo array tabelasPreco.
+// Usado uma única vez, na primeira vez que a filial é aberta no modal.
+function migrarTarifaAntiga(tabelaTarifa){
+  if(!tabelaTarifa) return [];
+  const out = [];
+  const NOMES = { carro: 'Carro - Tabela Padrão', moto: 'Moto - Tabela Padrão' };
+  for(const tipo of ['carro','moto']){
+    const t = tabelaTarifa[tipo];
+    if(!t || !t.modelo) continue;
+    const base = {
+      id: 'tab_'+Date.now().toString(36)+'_'+tipo,
+      nome: NOMES[tipo],
+      diasSemana: ['TODOS'],
+      horarioInicio: '00:00',
+      horarioFim: '23:59',
+      toleranciaMinutos: 0,
+    };
+    if(t.modelo === 'fixo'){
+      out.push({ ...base, tipoCobranca:'FIXO', valorFixo: t.valor_fixo||0, tetoDiaria:0, faixas:[], fracaoMin:0, fracaoValor:0 });
+    } else {
+      out.push({
+        ...base, tipoCobranca:'PROGRESSIVO', valorFixo:0,
+        tetoDiaria: t.teto_diaria||0,
+        faixas: (t.faixas||[]).map(fx=>({ ateMinutos: fx.ate_min||0, valor: fx.valor||0 })),
+        fracaoMin: t.fracao_min||0,
+        fracaoValor: t.fracao_valor||0
+      });
+    }
+  }
+  return out;
+}
+
+/* ======================================================================
+   NEXUS AUTH — Login Google + sessão
+   ====================================================================== */
+
+// ── Configurações de notificação ────────────────────────────────────
+// RESEND_APIKEY removida do client-side (migrada para secret no Supabase).
+// O envio de e-mail agora ocorre via Edge Function 'send-approval-email'.
+const ADMIN_EMAIL = 'patriick.vianna@gmail.com';
+const BASE_URL    = 'https://patriickvianna.github.io/nexus-analytics/nexus_analytics.html';
+
+const NexusAuth = {
+  user: null,
+  isAdmin: false,
+
+  async init(){
+    // Verifica se é um link de ação (aprovar/rejeitar via WhatsApp)
+    const params = new URLSearchParams(window.location.search);
+    const acao   = params.get('acao');
+    const token  = params.get('token');
+    if(acao && token){
+      await this._processarAcao(acao, token);
+      return;
+    }
+
+    document.getElementById('btn-google-login').onclick = ()=> this.login();
+
+    supa.auth.onAuthStateChange((event, session)=>{
+      if(event === 'SIGNED_OUT'){
+        this.user = null;
+        this._mostrarLogin();
+        return;
+      }
+      if(session && !this.user){
+        this.user = session.user;
+        this._verificarAcesso();
+      }
+    });
+
+    const { data: { session } } = await supa.auth.getSession();
+    if(session){
+      this.user = session.user;
+      await this._verificarAcesso();
+    } else {
+      this._mostrarLogin();
+    }
+  },
+
+  _mostrarLogin(){
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('shell').style.display = 'none';
+    document.getElementById('pending-screen').style.display = 'none';
+  },
+
+  async _verificarAcesso(){
+    const email = this.user.email;
+    const nome  = this.user.user_metadata?.full_name || email;
+
+    // Busca status e papel do usuário no banco
+    const { data: usuario } = await supa
+      .from('na_usuarios')
+      .select('status, nome, papel')
+      .eq('email', email)
+      .single();
+
+    if(usuario?.status === 'aprovado'){
+      this.isAdmin = usuario.papel === 'admin' || email === ADMIN_EMAIL;
+      this._onLogin();
+      return;
+    }
+
+    if(usuario?.status === 'bloqueado'){
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('pending-screen').style.display = 'flex';
+      document.getElementById('pending-msg').textContent = 'Seu acesso foi bloqueado. Entre em contato com o administrador.';
+      return;
+    }
+
+    // Primeiro acesso — registra usuário pendente
+    if(!usuario){
+      await supa.from('na_usuarios').insert({ email, nome, status: 'pendente' });
+    }
+
+    // Só gera novo token e envia e-mail se não houver token válido (< 48h)
+    // Evita spam ao admin quando o usuário pendente recarrega a página
+    const { data: usuarioAtual } = await supa
+      .from('na_usuarios')
+      .select('token_acao, token_expira')
+      .eq('email', email)
+      .single();
+
+    const tokenAindaValido = usuarioAtual?.token_acao
+      && usuarioAtual?.token_expira
+      && new Date(usuarioAtual.token_expira) > new Date();
+
+    if(!tokenAindaValido){
+      const token = crypto.randomUUID();
+      const expira = new Date(Date.now() + 48*60*60*1000).toISOString();
+      await supa.from('na_usuarios').update({ token_acao: token, token_expira: expira }).eq('email', email);
+      await this._notificarEmail(nome, email, token);
+    }
+
+    // Mostra tela de pendente
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('pending-screen').style.display = 'flex';
+    document.getElementById('pending-msg').textContent = 'Solicitação enviada! Aguarde a aprovação do administrador.';
+  },
+
+  async _notificarEmail(nome, email, token){
+    try {
+      const linkAprovar  = `${BASE_URL}?acao=aprovar&token=${token}`;
+      const linkRejeitar = `${BASE_URL}?acao=rejeitar&token=${token}`;
+
+      // Envia e-mail de aprovação via Edge Function (RESEND_APIKEY guardada no server-side)
+      const { error: fnError } = await supa.functions.invoke('send-approval-email', {
+        body: { nome, email, linkAprovar, linkRejeitar }
+      });
+      if (fnError) console.warn('send-approval-email erro:', fnError);
+    } catch(e){ console.warn('Notificação erro:', e); }
+  },
+
+  async _processarAcao(acao, token){
+    // Busca usuário pelo token
+    const { data: usuario } = await supa
+      .from('na_usuarios')
+      .select('*')
+      .eq('token_acao', token)
+      .single();
+
+    const container = document.getElementById('login-screen');
+    container.style.display = 'flex';
+    document.getElementById('pending-screen').style.display = 'none';
+
+    if(!usuario){
+      container.innerHTML = `<div class="login-card"><h1>Nexus <span>Analytics</span></h1><p style="color:var(--danger);">Token inválido ou já utilizado.</p></div>`;
+      return;
+    }
+
+    // Verifica expiração
+    if(new Date(usuario.token_expira) < new Date()){
+      container.innerHTML = `<div class="login-card"><h1>Nexus <span>Analytics</span></h1><p style="color:var(--warn);">Link expirado (válido por 48h). Peça ao usuário que tente entrar novamente.</p></div>`;
+      return;
+    }
+
+    const novoStatus = acao === 'aprovar' ? 'aprovado' : 'bloqueado';
+    await supa.from('na_usuarios').update({
+      status: novoStatus,
+      token_acao: null,
+      token_expira: null,
+      aprovado_em: acao === 'aprovar' ? new Date().toISOString() : null
+    }).eq('token_acao', token);
+
+    const emoji = acao === 'aprovar' ? '✅' : '❌';
+    const msg   = acao === 'aprovar'
+      ? `Acesso de <strong>${usuario.nome || usuario.email}</strong> aprovado com sucesso!`
+      : `Acesso de <strong>${usuario.nome || usuario.email}</strong> rejeitado.`;
+
+    container.innerHTML = `
+      <div class="login-card">
+        <h1>Nexus <span>Analytics</span></h1>
+        <div style="font-size:40px;margin:16px 0;">${emoji}</div>
+        <p style="font-size:15px;">${msg}</p>
+        <button class="btn-google" onclick="window.location.href='${BASE_URL}'" style="margin-top:16px;">Ir para o Nexus Analytics</button>
+      </div>`;
+
+    // Limpa a URL
+    window.history.replaceState({}, document.title, BASE_URL);
+  },
+
+  async login(){
+    await supa.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.href, queryParams: { prompt: 'select_account' } }
+    });
+  },
+
+  async logout(){
+    if(!confirm('Deseja sair do Nexus Analytics?')) return;
+    await supa.auth.signOut();
+  },
+
+  async _onLogin(){
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('pending-screen').style.display = 'none';
+    document.getElementById('shell').style.display = '';
+    const nome = this.user?.user_metadata?.full_name || this.user?.email || '';
+    document.getElementById('user-name').textContent = nome.split(' ')[0];
+    await Nexus.initAsync();
+  },
+
+  async log(tabela, operacao, registro_id, dados_antes, dados_depois){
+    await supa.from('na_log_alteracoes').insert({
+      tabela, operacao, registro_id, dados_antes, dados_depois,
+      usuario_email: this.user?.email
+    });
+  }
+};
+
+/* ======================================================================
+   NEXUS DB — Persistência local via IndexedDB
+   Slot único (current_report): sobrescreve a cada importação, sem acúmulo.
+   Suporta o volume real de 67k+ linhas que estoura sessionStorage/localStorage.
+   ====================================================================== */
+const NexusDB = {
+  _db: null,
+  DB_NAME:    'nexus_analytics',
+  DB_VERSION: 1,
+  STORE:      'reports',
+  KEY:        'current_report',
+
+  open(){
+    return new Promise((resolve, reject) => {
+      if(this._db) return resolve(this._db);
+      const req = indexedDB.open(this.DB_NAME, this.DB_VERSION);
+      req.onupgradeneeded = e => {
+        e.target.result.createObjectStore(this.STORE, { keyPath: 'id' });
+      };
+      req.onsuccess = e => { this._db = e.target.result; resolve(this._db); };
+      req.onerror   = e => { console.warn('NexusDB.open erro:', e.target.error); reject(e.target.error); };
+    });
+  },
+
+  async save(){
+    try {
+      const db = await this.open();
+      return new Promise((resolve, reject) => {
+        const tx  = db.transaction(this.STORE, 'readwrite');
+        const req = tx.objectStore(this.STORE).put({
+          id:      this.KEY,
+          data:    Nexus.rawData,
+          filial:  Nexus._filialAtual || null,
+          savedAt: Date.now()
+        });
+        req.onsuccess = () => resolve();
+        req.onerror   = e  => { console.warn('NexusDB.save erro:', e.target.error); reject(e.target.error); };
+      });
+    } catch(e){ console.warn('NexusDB.save falhou:', e); }
+  },
+
+  async load(){
+    try {
+      const db = await this.open();
+      return new Promise((resolve) => {
+        const req = db.transaction(this.STORE, 'readonly')
+                      .objectStore(this.STORE)
+                      .get(this.KEY);
+        req.onsuccess = e => resolve(e.target.result || null);
+        req.onerror   = () => resolve(null);
+      });
+    } catch(e){ console.warn('NexusDB.load falhou:', e); return null; }
+  },
+
+  async clear(){
+    try {
+      const db = await this.open();
+      return new Promise((resolve) => {
+        const req = db.transaction(this.STORE, 'readwrite')
+                      .objectStore(this.STORE)
+                      .delete(this.KEY);
+        req.onsuccess = () => resolve();
+        req.onerror   = () => resolve();
+      });
+    } catch(e){ console.warn('NexusDB.clear falhou:', e); }
+  }
+};
+
+/* ======================================================================
+   MÓDULO CONFIGURAÇÕES
+   ====================================================================== */
+const ModuloConfiguracoes = {
+  id: 'config',
+  nome: 'Configurações',
+  icon: '⚙️',
+  abaAtiva: 'filiais',
+
+  renderFilters(container){ container.innerHTML = ''; },
+
+  render(container){
+    container.innerHTML = `
+      <div class="config-tabs">
+        <div class="config-tab ${this.abaAtiva==='filiais'?'active':''}"       data-aba="filiais">Filiais</div>
+        <div class="config-tab ${this.abaAtiva==='supervisores'?'active':''}"  data-aba="supervisores">Supervisores</div>
+        ${NexusAuth.isAdmin ? `
+        <div class="config-tab ${this.abaAtiva==='gestores'?'active':''}"      data-aba="gestores">Gestores</div>
+        <div class="config-tab ${this.abaAtiva==='usuarios'?'active':''}"      data-aba="usuarios">Usuários</div>
+        <div class="config-tab ${this.abaAtiva==='log'?'active':''}"           data-aba="log">Log</div>
+        ` : ''}
+      </div>
+      <div id="config-content"></div>
+    `;
+    container.querySelectorAll('.config-tab').forEach(tab=>{
+      tab.onclick = ()=>{
+        this.abaAtiva = tab.dataset.aba;
+        this.render(container);
+      };
+    });
+    this._renderAba(container.querySelector('#config-content'));
+  },
+
+  async _renderAba(el){
+    el.innerHTML = '<div style="color:var(--muted);padding:20px;">Carregando...</div>';
+    switch(this.abaAtiva){
+      case 'filiais':      await this._abaFiliais(el);      break;
+      case 'supervisores': await this._abaSupervisores(el); break;
+      case 'gestores':     await this._abaGestores(el);     break;
+      case 'usuarios':     await this._abaUsuarios(el);     break;
+      case 'log':          await this._abaLog(el);          break;
+    }
+  },
+
+  // ── ABA GESTORES ────────────────────────────────────────────────
+  async _abaGestores(el){
+    if(!NexusAuth.isAdmin){ el.innerHTML = '<p style="color:var(--danger);">Acesso restrito ao administrador.</p>'; return; }
+    const { data: gestores } = await supa.from('na_gestores')
+      .select('*, na_supervisores(id,nome,ativo,na_filiais(id,nome,status))')
+      .order('nome');
+
+    const ativos   = (gestores||[]).filter(g=>g.ativo);
+    const inativos = (gestores||[]).filter(g=>!g.ativo);
+
+    const renderGestores = (lista, mostrarInativ) => {
+      const todos = mostrarInativ ? lista : lista.filter(g=>g.ativo);
+      return todos.map(g => {
+        const sups = (g.na_supervisores||[]).filter(s=>s.ativo);
+        const totalFiliais = sups.reduce((s,sv)=>(sv.na_filiais||[]).filter(f=>f.status==='ativa').length+s,0);
+        return `
+        <div style="background:var(--panel2);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;" onclick="this.parentElement.querySelector('.g-body').style.display=this.parentElement.querySelector('.g-body').style.display==='none'?'block':'none'">
+            <div>
+              <span style="font-weight:700;color:var(--text);">👤 ${esc(g.nome)}</span>
+              ${g.email?`<span style="font-size:11px;color:var(--muted);margin-left:8px;">${esc(g.email)}</span>`:''}
+              <span style="font-size:11px;color:var(--muted);margin-left:12px;">${sups.length} supervisor(es) · ${totalFiliais} filial(is)</span>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button class="btn-edit-sm" data-id="${g.id}" data-nome="${esc(g.nome)}" data-email="${esc(g.email||"")}">Editar</button>
+              <button class="btn-toggle" data-id="${g.id}" data-ativo="${g.ativo}" style="background:none;border:1px solid ${g.ativo?'var(--warn)':'var(--accent2)'};color:${g.ativo?'var(--warn)':'var(--accent2)'};padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;">${g.ativo?'Desativar':'Reativar'}</button>
+            </div>
+          </div>
+          <div class="g-body" style="display:none;padding:0 16px 12px;">
+            ${sups.length===0?'<p style="color:var(--muted);font-size:12px;">Nenhum supervisor vinculado.</p>':
+              sups.map(sv=>{
+                const fils = (sv.na_filiais||[]).filter(f=>f.status==='ativa');
+                return `<div style="margin-bottom:8px;padding:8px;background:var(--panel);border-radius:8px;">
+                  <div style="font-size:13px;font-weight:600;color:var(--accent2);margin-bottom:4px;">↳ ${sv.nome}</div>
+                  ${fils.length===0?'<span style="font-size:11px;color:var(--muted);">Sem filiais ativas</span>':
+                    fils.map(f=>`<span style="display:inline-block;font-size:11px;background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:2px 8px;margin:2px;">${esc(f.nome)}</span>`).join('')}
+                </div>`;
+              }).join('')}
+          </div>
+        </div>`;
+      }).join('');
+    };
+
+    el.innerHTML = `
+      <div class="panel" style="margin-bottom:14px;">
+        <h2>Novo Gestor</h2>
+        <div class="form-grid">
+          <div class="form-group"><label>Nome</label><input id="g-nome" placeholder="Nome completo"></div>
+          <div class="form-group"><label>E-mail</label><input id="g-email" placeholder="email@empresa.com"></div>
+        </div>
+        <button class="btn-primary" id="btn-add-gestor">+ Adicionar Gestor</button>
+        <div id="msg-gestor" style="font-size:12px;margin-top:8px;min-height:16px;"></div>
+      </div>
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <h2 style="margin:0;">Gestores (${ativos.length} ativos)</h2>
+          <label style="font-size:12px;color:var(--muted);cursor:pointer;">
+            <input type="checkbox" id="chk-inativos-g" style="margin-right:4px;">Mostrar inativos (${inativos.length})
+          </label>
+        </div>
+        <div id="gestores-lista">${renderGestores(gestores||[], false)}</div>
+      </div>`;
+
+    const msgG = el.querySelector('#msg-gestor');
+    const showMsgG = (txt, ok=false) => {
+      msgG.style.color = ok ? 'var(--accent2)' : 'var(--danger)';
+      msgG.textContent = txt;
+      if(ok) setTimeout(()=>{ msgG.textContent=''; }, 3000);
+    };
+
+    el.querySelector('#btn-add-gestor').onclick = async ()=>{
+      const nome = el.querySelector('#g-nome').value.trim();
+      if(!nome) return showMsgG('Informe o nome.');
+      const { data, error } = await supa.from('na_gestores').insert({
+        nome, email: el.querySelector('#g-email').value.trim()
+      }).select().single();
+      if(error) return showMsgG('Erro: '+error.message);
+      await NexusAuth.log('na_gestores','INSERT',data.id,null,data);
+      this._abaGestores(el);
+    };
+
+    el.querySelector('#chk-inativos-g').onchange = e=>{
+      el.querySelector('#gestores-lista').innerHTML = renderGestores(gestores||[], e.target.checked);
+      this._bindGestoresEvents(el, gestores||[]);
+    };
+
+    this._bindGestoresEvents(el, gestores||[]);
+  },
+
+  _bindGestoresEvents(el, gestores){
+    el.querySelectorAll('.btn-edit-sm').forEach(btn=>{
+      btn.onclick = ()=>{
+        const nome = prompt('Nome do gestor:', btn.dataset.nome);
+        if(!nome) return;
+        const email = prompt('E-mail:', btn.dataset.email);
+        supa.from('na_gestores').update({nome, email}).eq('id',btn.dataset.id)
+          .select().single().then(({data})=>{
+            NexusAuth.log('na_gestores','UPDATE',btn.dataset.id,null,data);
+            this._abaGestores(el);
+          });
+      };
+    });
+    el.querySelectorAll('.btn-toggle').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const ativo = btn.dataset.ativo === 'true';
+        const { data } = await supa.from('na_gestores').update({ativo:!ativo}).eq('id',btn.dataset.id).select().single();
+        await NexusAuth.log('na_gestores','UPDATE',btn.dataset.id,{ativo},data);
+        this._abaGestores(el);
+      };
+    });
+  },
+
+  // ── ABA SUPERVISORES ────────────────────────────────────────────
+  async _abaSupervisores(el){
+    const [{ data: supervisores }, { data: gestores }] = await Promise.all([
+      supa.from('na_supervisores').select('*, na_gestores(id,nome), na_filiais(id,nome,status)').order('nome'),
+      supa.from('na_gestores').select('id,nome').eq('ativo',true).order('nome')
+    ]);
+
+    const filtrarPorGestor = (gestorId) => {
+      const lista = gestorId
+        ? (supervisores||[]).filter(s=>s.gestor_id===gestorId)
+        : (supervisores||[]);
+      return lista;
+    };
+
+    const renderSups = (lista, mostrarInativ) => {
+      const todos = mostrarInativ ? lista : lista.filter(s=>s.ativo);
+      if(!todos.length) return '<p style="color:var(--muted);font-size:13px;">Nenhum supervisor encontrado.</p>';
+      return todos.map(s=>{
+        const fils = (s.na_filiais||[]).filter(f=>f.status==='ativa');
+        return `
+        <div style="background:var(--panel2);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;" onclick="this.parentElement.querySelector('.s-body').style.display=this.parentElement.querySelector('.s-body').style.display==='none'?'block':'none'">
+            <div>
+              <span style="font-weight:600;color:var(--text);">👤 ${esc(s.nome)}</span>
+              ${s.na_gestores?.nome?`<span style="font-size:11px;color:var(--muted);margin-left:8px;">Gestor: ${s.na_gestores.nome}</span>`:''}
+              <span style="font-size:11px;color:var(--muted);margin-left:8px;">${fils.length} filial(is)</span>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button class="btn-edit-sm" data-id="${s.id}" data-nome="${esc(s.nome)}" data-email="${esc(s.email||"")}" data-gestor="${s.gestor_id||''}">Editar</button>
+              <button class="btn-toggle" data-id="${s.id}" data-ativo="${s.ativo}" style="background:none;border:1px solid ${s.ativo?'var(--warn)':'var(--accent2)'};color:${s.ativo?'var(--warn)':'var(--accent2)'};padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;">${s.ativo?'Desativar':'Reativar'}</button>
+            </div>
+          </div>
+          <div class="s-body" style="display:none;padding:0 16px 12px;">
+            ${fils.length===0?'<span style="font-size:12px;color:var(--muted);">Sem filiais ativas vinculadas.</span>':
+              fils.map(f=>`<span style="display:inline-block;font-size:11px;background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:2px 8px;margin:2px;">${esc(f.nome)}</span>`).join('')}
+          </div>
+        </div>`;
+      }).join('');
+    };
+
+    el.innerHTML = `
+      <div class="panel" style="margin-bottom:14px;">
+        <h2>Novo Supervisor</h2>
+        <div class="form-grid">
+          <div class="form-group"><label>Nome</label><input id="s-nome" placeholder="Nome completo"></div>
+          <div class="form-group"><label>E-mail</label><input id="s-email" placeholder="email@empresa.com"></div>
+          <div class="form-group"><label>Gestor responsável</label>
+            <select id="s-gestor">
+              <option value="">Selecione o gestor</option>
+              ${(gestores||[]).map(g=>`<option value="${g.id}">${esc(g.nome)}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <button class="btn-primary" id="btn-add-sup">+ Adicionar Supervisor</button>
+        <div id="msg-sup" style="font-size:12px;margin-top:8px;min-height:16px;"></div>
+      </div>
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+          <h2 style="margin:0;">Supervisores</h2>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <select id="filtro-gestor-sup" style="background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:7px;font-size:12px;">
+              <option value="">Todos os gestores</option>
+              ${(gestores||[]).map(g=>`<option value="${g.id}">${esc(g.nome)}</option>`).join('')}
+            </select>
+            <label style="font-size:12px;color:var(--muted);cursor:pointer;">
+              <input type="checkbox" id="chk-inativos-s" style="margin-right:4px;">Mostrar inativos
+            </label>
+          </div>
+        </div>
+        <div id="sups-lista">${renderSups(supervisores||[], false)}</div>
+      </div>`;
+
+    const atualizar = ()=>{
+      const gId = el.querySelector('#filtro-gestor-sup').value;
+      const inat = el.querySelector('#chk-inativos-s').checked;
+      el.querySelector('#sups-lista').innerHTML = renderSups(filtrarPorGestor(gId), inat);
+      this._bindSupsEvents(el, supervisores||[], gestores||[]);
+    };
+
+    el.querySelector('#filtro-gestor-sup').onchange = atualizar;
+    el.querySelector('#chk-inativos-s').onchange = atualizar;
+
+    const msgS = el.querySelector('#msg-sup');
+    const showMsgS = (txt, ok=false) => {
+      msgS.style.color = ok ? 'var(--accent2)' : 'var(--danger)';
+      msgS.textContent = txt;
+      if(ok) setTimeout(()=>{ msgS.textContent=''; }, 3000);
+    };
+
+    el.querySelector('#btn-add-sup').onclick = async ()=>{
+      const nome = el.querySelector('#s-nome').value.trim();
+      if(!nome) return showMsgS('Informe o nome.');
+      const { data, error } = await supa.from('na_supervisores').insert({
+        nome, email: el.querySelector('#s-email').value.trim(),
+        gestor_id: el.querySelector('#s-gestor').value || null
+      }).select().single();
+      if(error) return showMsgS('Erro: '+error.message);
+      await NexusAuth.log('na_supervisores','INSERT',data.id,null,data);
+      this._abaSupervisores(el);
+    };
+
+    this._bindSupsEvents(el, supervisores||[], gestores||[]);
+  },
+
+  _bindSupsEvents(el, supervisores, gestores){
+    el.querySelectorAll('.btn-edit-sm').forEach(btn=>{
+      btn.onclick = ()=>{
+        const nome = prompt('Nome do supervisor:', btn.dataset.nome);
+        if(!nome) return;
+        const email = prompt('E-mail:', btn.dataset.email);
+        const gestorId = btn.dataset.gestor;
+        const gestorNome = gestores.find(g=>g.id===gestorId)?.nome||'Nenhum';
+        // Lista numerada de gestores — mesma lógica robusta usada em Filiais
+        const gestorNomes = gestores.map((g,i)=>`${i+1}. ${esc(g.nome)}`).join('\n');
+        const gestorIdxRaw = prompt(
+          `Gestor atual: ${gestorNome}\n\nGestores disponíveis:\n${gestorNomes}\n\nDigite o número do novo gestor (Enter para manter o atual):`
+        );
+        let novoGestorId = gestorId;
+        if(gestorIdxRaw && gestorIdxRaw.trim() !== ''){
+          const idx = parseInt(gestorIdxRaw) - 1;
+          if(!isNaN(idx) && gestores[idx]) novoGestorId = gestores[idx].id;
+          else { console.warn('Nexus: índice de gestor inválido —', gestorIdxRaw); }
+        }
+        supa.from('na_supervisores').update({nome, email, gestor_id: novoGestorId})
+          .eq('id',btn.dataset.id).select().single()
+          .then(({data})=>{
+            NexusAuth.log('na_supervisores','UPDATE',btn.dataset.id,null,data);
+            this._abaSupervisores(el);
+          });
+      };
+    });
+    el.querySelectorAll('.btn-toggle').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const ativo = btn.dataset.ativo === 'true';
+        const { data } = await supa.from('na_supervisores').update({ativo:!ativo}).eq('id',btn.dataset.id).select().single();
+        await NexusAuth.log('na_supervisores','UPDATE',btn.dataset.id,{ativo},data);
+        this._abaSupervisores(el);
+      };
+    });
+  },
+
+  // ── ABA FILIAIS ─────────────────────────────────────────────────
+  async _abaFiliais(el){
+    const [{ data: filiais }, { data: supervisores }, { data: gestores }] = await Promise.all([
+      supa.from('na_filiais').select('*, tabela_tarifa, tabelas_preco, na_supervisores(id,nome,gestor_id, na_gestores(id,nome))').order('nome'),
+      supa.from('na_supervisores').select('id,nome,gestor_id').eq('ativo',true).order('nome'),
+      supa.from('na_gestores').select('id,nome').eq('ativo',true).order('nome')
+    ]);
+
+    // Cache em memória para uso no modal de tarifas (evita data-tarifa no DOM)
+    this._filiaisCache = filiais || [];
+    const supsPorGestor = {};
+    (supervisores||[]).forEach(s=>{
+      if(!supsPorGestor[s.gestor_id]) supsPorGestor[s.gestor_id] = [];
+      supsPorGestor[s.gestor_id].push(s);
+    });
+
+    el.innerHTML = `
+      <div class="panel" style="margin-bottom:14px;">
+        <h2>Importar lista de filiais</h2>
+        <p style="font-size:13px;color:var(--muted);margin:0 0 12px;">
+          Importe qualquer planilha com colunas de <strong>Nome</strong>, <strong>Código</strong>,
+          Supervisor, Gestor, Estado, Regional e Status — a ferramenta identifica as colunas automaticamente
+          pelo conteúdo do cabeçalho. Cadastra novas filiais, atualiza existentes e marca como
+          <strong>encerrada</strong> as que saírem da lista.
+        </p>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <input type="file" id="f-import-input" accept=".xlsb,.xlsx,.xls" style="display:none;">
+          <button class="btn-primary" id="btn-import-filiais">📂 Importar arquivo de filiais</button>
+          <span id="import-msg" style="font-size:12px;color:var(--accent2);"></span>
+        </div>
+        <div id="import-progress" style="display:none;margin-top:12px;">
+          <div style="height:6px;background:var(--panel2);border-radius:4px;overflow:hidden;">
+            <div id="import-bar" style="height:100%;width:0%;background:var(--accent);transition:.2s;"></div>
+          </div>
+          <div id="import-status" style="font-size:12px;color:var(--muted);margin-top:6px;"></div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-bottom:14px;">
+        <h2>Adicionar filial manualmente</h2>
+        <div class="form-grid">
+          <div class="form-group"><label>Código da Garagem</label><input id="f-cod" placeholder="ex: 000887"></div>
+          <div class="form-group"><label>Nome</label><input id="f-nome" placeholder="Nome da filial"></div>
+          <div class="form-group"><label>Estado</label><input id="f-estado" placeholder="RJ"></div>
+          <div class="form-group"><label>Regional</label><input id="f-regional" placeholder="ex: Regional Sul"></div>
+          <div class="form-group"><label>Gestor</label>
+            <select id="f-gestor-sel">
+              <option value="">Selecione o gestor</option>
+              ${(gestores||[]).map(g=>`<option value="${g.id}">${esc(g.nome)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group"><label>Supervisor</label>
+            <select id="f-sup-sel" disabled>
+              <option value="">Selecione o gestor primeiro</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn-primary" id="btn-add-filial">+ Adicionar Filial</button>
+        <div id="msg-filial" style="font-size:12px;margin-top:8px;min-height:16px;"></div>
+      </div>
+
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+          <h2 style="margin:0;">Filiais cadastradas <span style="color:var(--muted);font-size:12px;font-weight:400;">(${(filiais||[]).length})</span></h2>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <select id="filtro-gestor-fil" style="background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:7px;font-size:12px;">
+              <option value="">Todos os gestores</option>
+              ${(gestores||[]).map(g=>`<option value="${g.id}">${esc(g.nome)}</option>`).join('')}
+            </select>
+            <select id="filtro-sup-fil" style="background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:7px;font-size:12px;">
+              <option value="">Todos os supervisores</option>
+              ${(supervisores||[]).map(s=>`<option value="${s.id}">${esc(s.nome)}</option>`).join('')}
+            </select>
+            <input type="text" id="f-busca" placeholder="Buscar filial..." style="padding:6px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;">
+            <label style="font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap;">
+              <input type="checkbox" id="chk-inativos-f" style="margin-right:4px;">Mostrar encerradas
+            </label>
+          </div>
+        </div>
+        <div class="table-scroll" style="max-height:440px;">
+          <table class="data-table" id="filiais-table">
+            <thead><tr><th>Cód.</th><th>Nome</th><th>Estado</th><th>Regional</th><th>Gestor</th><th>Supervisor</th><th>Status</th><th></th></tr></thead>
+            <tbody id="filiais-tbody">
+              ${this._renderFiliaisRows(filiais||[], '')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+
+    // Cascading select gestor → supervisor no formulário
+    const gestorSel = el.querySelector('#f-gestor-sel');
+    const supSel    = el.querySelector('#f-sup-sel');
+    gestorSel.onchange = ()=>{
+      const gId = gestorSel.value;
+      const sups = gId ? (supsPorGestor[gId]||[]) : (supervisores||[]);
+      supSel.innerHTML = `<option value="">Selecione o supervisor</option>${sups.map(s=>`<option value="${s.id}">${esc(s.nome)}</option>`).join('')}`;
+      supSel.disabled = !gId;
+    };
+
+    // Filtros da listagem
+    const aplicarFiltros = ()=>{
+      const gId  = el.querySelector('#filtro-gestor-fil').value;
+      const sId  = el.querySelector('#filtro-sup-fil').value;
+      const busca = el.querySelector('#f-busca').value.toLowerCase();
+      const inat  = el.querySelector('#chk-inativos-f').checked;
+      let lista = filiais||[];
+      if(!inat) lista = lista.filter(f=>f.status==='ativa');
+      if(gId)   lista = lista.filter(f=>f.na_supervisores?.na_gestores?.id===gId || f.na_supervisores?.gestor_id===gId);
+      if(sId)   lista = lista.filter(f=>f.supervisor_id===sId);
+      if(busca)  lista = lista.filter(f=>f.nome.toLowerCase().includes(busca));
+      el.querySelector('#filiais-tbody').innerHTML = this._renderFiliaisRows(lista, '');
+      this._bindFiliaisEvents(el, supervisores||[], gestores||[], supsPorGestor);
+    };
+
+    ['#filtro-gestor-fil','#filtro-sup-fil','#f-busca','#chk-inativos-f'].forEach(sel=>{
+      el.querySelector(sel).addEventListener('change', aplicarFiltros);
+      el.querySelector(sel).addEventListener('input', aplicarFiltros);
+    });
+
+    // Importação do arquivo
+    el.querySelector('#btn-import-filiais').onclick = ()=> el.querySelector('#f-import-input').click();
+    el.querySelector('#f-import-input').onchange = async (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      await this._importarFiliais(file, el);
+    };
+
+    // Adicionar manualmente
+    const msgF = el.querySelector('#msg-filial');
+    const showMsgF = (txt, ok=false) => {
+      msgF.style.color = ok ? 'var(--accent2)' : 'var(--danger)';
+      msgF.textContent = txt;
+      if(ok) setTimeout(()=>{ msgF.textContent=''; }, 3000);
+    };
+
+    el.querySelector('#btn-add-filial').onclick = async ()=>{
+      const nome = el.querySelector('#f-nome').value.trim();
+      if(!nome) return showMsgF('Nome é obrigatório.');
+      const { data, error } = await supa.from('na_filiais').insert({
+        codigo_garagem: el.querySelector('#f-cod').value.trim() || null,
+        nome, estado: el.querySelector('#f-estado').value.trim(),
+        regional: el.querySelector('#f-regional').value.trim() || null,
+        supervisor_id: el.querySelector('#f-sup-sel').value || null
+      }).select().single();
+      if(error) return showMsgF('Erro: '+(error.message.includes('unique')?'Código já cadastrado.':error.message));
+      await NexusAuth.log('na_filiais','INSERT',data.id,null,data);
+      this._abaFiliais(el);
+    };
+
+    this._bindFiliaisEvents(el, supervisores||[], gestores||[], supsPorGestor);
+  },
+
+  _renderFiliaisRows(lista, _){
+    if(!lista.length) return '<tr><td colspan="8" style="color:var(--muted)">Nenhuma filial encontrada</td></tr>';
+    return lista.map(f=>`
+      <tr>
+        <td style="font-family:monospace;font-size:12px;">${esc(f.codigo_garagem||"—")}</td>
+        <td>${esc(f.nome)}</td>
+        <td>${esc(f.estado||"—")}</td>
+        <td>${esc(f.regional||"—")}</td>
+        <td>${esc(f.na_supervisores?.na_gestores?.nome||'—')}</td>
+        <td>${esc(f.na_supervisores?.nome||'—')}</td>
+        <td><span class="badge-${f.status}">${f.status.charAt(0).toUpperCase()+f.status.slice(1)}</span></td>
+        <td style="white-space:nowrap;display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+          <button class="btn-edit-sm" data-id="${f.id}"
+            data-cod="${esc(f.codigo_garagem||"")}" data-nome="${esc(f.nome)}"
+            data-estado="${esc(f.estado||"")}" data-sup="${f.supervisor_id||''}">Editar</button>
+          <button class="btn-tarifa" data-id="${f.id}"
+            style="background:none;border:1px solid var(--accent);color:var(--accent);padding:4px 8px;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;">📋 Tabela</button>
+          <select class="sel-status" data-id="${f.id}" data-antes="${f.status}"
+            style="background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 6px;font-size:11px;">
+            <option ${f.status==='ativa'?'selected':''} value="ativa">Ativa</option>
+            <option ${f.status==='encerrada'?'selected':''} value="encerrada">Encerrada</option>
+            <option ${f.status==='suspensa'?'selected':''} value="suspensa">Suspensa</option>
+          </select>
+        </td>
+      </tr>`).join('');
+  },
+
+  _bindFiliaisEvents(el, supervisores, gestores, supsPorGestor){
+    // Botão Tabela — abre modal de configuração de tarifas
+    el.querySelectorAll('.btn-tarifa').forEach(btn=>{
+      btn.onclick = ()=>{
+        const filial = (this._filiaisCache||[]).find(f=>f.id===btn.dataset.id);
+        this._abrirModalTarifa(filial, el);
+      };
+    });
+
+    // Editar filial com cascading select
+    el.querySelectorAll('.btn-edit-sm').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const nome = prompt('Nome da filial:', btn.dataset.nome);
+        if(!nome) return;
+        const cod = prompt('Código da garagem:', btn.dataset.cod);
+        if(cod===null) return;
+        const estado = prompt('Estado (UF):', btn.dataset.estado);
+        if(estado===null) return;
+
+        // Seleciona gestor
+        const gestorNomes = gestores.map((g,i)=>`${i+1}. ${esc(g.nome)}`).join('\n');
+        const gestorIdx = parseInt(prompt(`Gestor:\n${gestorNomes}\n\nDigite o número:`)) - 1;
+        const gestor = gestores[gestorIdx];
+        if(!gestor && gestorIdx !== -2) {
+          // Número fora do range — cancela a edição silenciosamente (usuário digitou errado no prompt)
+          prompt('Número de gestor inválido. Edição cancelada.\nClique OK para fechar.');
+          return;
+        }
+
+        let supId = null;
+        if(gestor){
+          const sups = supsPorGestor[gestor.id] || supervisores.filter(s=>s.gestor_id===gestor.id);
+          if(sups.length){
+            const supNomes = sups.map((s,i)=>`${i+1}. ${esc(s.nome)}`).join('\n');
+            const supIdx = parseInt(prompt(`Supervisor:\n${supNomes}\n\nDigite o número:`)) - 1;
+            supId = sups[supIdx]?.id || null;
+          }
+        }
+
+        const { data } = await supa.from('na_filiais')
+          .update({ nome, codigo_garagem: cod||null, estado, supervisor_id: supId })
+          .eq('id', btn.dataset.id).select().single();
+        await NexusAuth.log('na_filiais','UPDATE',btn.dataset.id,null,data);
+        this._abaFiliais(el);
+      };
+    });
+
+    el.querySelectorAll('.sel-status').forEach(sel=>{
+      sel.onchange = async ()=>{
+        const antes = sel.dataset.antes;
+        const { data } = await supa.from('na_filiais').update({status:sel.value}).eq('id',sel.dataset.id).select().single();
+        await NexusAuth.log('na_filiais','UPDATE',sel.dataset.id,{status:antes},{status:sel.value});
+        sel.dataset.antes = sel.value;
+      };
+    });
+  },
+
+  // ── MODAL DE TABELAS DE PREÇO ───────────────────────────────────
+  async _abrirModalTarifa(filial, elConfig){
+    const nome = esc(filial?.nome) || 'Filial';
+    const id   = filial?.id;
+
+    // Migração automática (uma única vez): se ainda não há tabelasPreco mas
+    // existe o formato antigo carro/moto, converte e já persiste no novo formato.
+    let tabelasPreco = filial?.tabelas_preco || [];
+    if((!tabelasPreco || tabelasPreco.length === 0) && filial?.tabela_tarifa && Object.keys(filial.tabela_tarifa).length){
+      tabelasPreco = migrarTarifaAntiga(filial.tabela_tarifa);
+      if(tabelasPreco.length){
+        await supa.from('na_filiais').update({ tabelas_preco: tabelasPreco }).eq('id', id);
+        const cached = (this._filiaisCache||[]).find(f=>f.id===id);
+        if(cached) cached.tabelas_preco = tabelasPreco;
+      }
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-tarifa';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px;';
+    document.body.appendChild(overlay);
+
+    const fechar = () => overlay.remove();
+
+    // ---------------- VIEW: LISTA ----------------
+    const renderLista = () => {
+      const linha = (t, i) => {
+        const dias = (t.diasSemana||[]).includes('TODOS') ? 'Todos os dias' : (t.diasSemana||[]).join(', ');
+        const cobranca = t.tipoCobranca === 'FIXO'
+          ? `Fixo: R$ ${(t.valorFixo||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}`
+          : `Progressivo (${(t.faixas||[]).length} faixa${(t.faixas||[]).length===1?'':'s'})`;
+        return `
+        <div style="background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:start;gap:10px;flex-wrap:wrap;">
+            <div>
+              <div style="font-weight:700;font-size:14px;">${esc(t.nome)}</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:3px;">
+                ${esc(dias)} · ${esc(t.horarioInicio)}–${esc(t.horarioFim)} · Tolerância ${t.toleranciaMinutos||0}min
+              </div>
+              <div style="font-size:12px;color:var(--accent2);margin-top:3px;">${esc(cobranca)}</div>
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0;">
+              <button class="btn-edit-sm btn-editar-tabela" data-idx="${i}">Editar</button>
+              <button class="btn-edit-sm btn-excluir-tabela" data-idx="${i}" style="border-color:var(--danger);color:var(--danger);">Excluir</button>
+            </div>
+          </div>
+        </div>`;
+      };
+
+      overlay.innerHTML = `
+        <div style="background:var(--panel);border-radius:14px;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;padding:24px;box-shadow:0 8px 40px rgba(0,0,0,.5);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+            <div>
+              <h2 style="margin:0;font-size:16px;">📋 Tabelas de Preço</h2>
+              <span style="font-size:12px;color:var(--muted);">${nome}</span>
+            </div>
+            <button id="modal-fechar" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:0 4px;">✕</button>
+          </div>
+
+          <button id="btn-nova-tabela" class="btn-primary" style="margin-bottom:14px;">+ Nova Tabela de Preço</button>
+
+          <div id="lista-tabelas">
+            ${tabelasPreco.length
+              ? tabelasPreco.map(linha).join('')
+              : `<div style="text-align:center;color:var(--muted);font-size:13px;padding:24px 0;">Nenhuma tabela de preço cadastrada ainda.</div>`}
+          </div>
+
+          <div style="display:flex;justify-content:flex-end;margin-top:6px;">
+            <button id="modal-cancelar-lista" style="padding:9px 20px;background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;cursor:pointer;font-size:13px;">Fechar</button>
+          </div>
+        </div>`;
+
+      overlay.querySelector('#modal-fechar').onclick = fechar;
+      overlay.querySelector('#modal-cancelar-lista').onclick = fechar;
+      overlay.onclick = e => { if(e.target === overlay) fechar(); };
+
+      overlay.querySelector('#btn-nova-tabela').onclick = () => renderForm(null);
+      overlay.querySelectorAll('.btn-editar-tabela').forEach(btn=>{
+        btn.onclick = () => renderForm(parseInt(btn.dataset.idx));
+      });
+      overlay.querySelectorAll('.btn-excluir-tabela').forEach(btn=>{
+        btn.onclick = async () => {
+          if(!confirm(`Excluir a tabela "${tabelasPreco[parseInt(btn.dataset.idx)].nome}"?`)) return;
+          tabelasPreco.splice(parseInt(btn.dataset.idx), 1);
+          await persistir();
+          renderLista();
+        };
+      });
+    };
+
+    // ---------------- VIEW: FORMULÁRIO (nova ou edição) ----------------
+    const renderForm = (idx) => {
+      const editando = idx !== null && idx !== undefined;
+      const t = editando ? tabelasPreco[idx] : {
+        id: 'tab_'+Date.now().toString(36),
+        nome: '', diasSemana: ['TODOS'], horarioInicio: '00:00', horarioFim: '23:59',
+        toleranciaMinutos: 0, tipoCobranca: 'PROGRESSIVO', valorFixo: 0,
+        tetoDiaria: 0, faixas: [{ateMinutos:60, valor:0}], fracaoMin: 0, fracaoValor: 0
+      };
+
+      const diaChip = sigla => `
+        <div class="chip dia-chip ${(t.diasSemana||[]).includes('TODOS') || (t.diasSemana||[]).includes(sigla) ? 'on' : ''}"
+          data-dia="${sigla}" style="cursor:pointer;">${sigla}</div>`;
+
+      overlay.innerHTML = `
+        <div style="background:var(--panel);border-radius:14px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto;padding:24px;box-shadow:0 8px 40px rgba(0,0,0,.5);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+            <div>
+              <h2 style="margin:0;font-size:16px;">${editando ? '✏️ Editar' : '+ Nova'} Tabela de Preço</h2>
+              <span style="font-size:12px;color:var(--muted);">${nome}</span>
+            </div>
+            <button id="modal-fechar" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:0 4px;">✕</button>
+          </div>
+
+          <div class="form-group" style="margin-bottom:12px;">
+            <label style="font-size:12px;color:var(--muted);">Nome da Tabela</label>
+            <input type="text" id="f-nome" placeholder='Ex: "Pernoite Promocional", "Carro - Tabela Padrão"' value="${esc(t.nome)}"
+              style="width:100%;padding:8px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:14px;box-sizing:border-box;">
+          </div>
+
+          <div class="form-group" style="margin-bottom:12px;">
+            <label style="font-size:12px;color:var(--muted);">Dias da Semana</label>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+              <div class="chip dia-chip ${(t.diasSemana||[]).includes('TODOS')?'on':''}" data-dia="TODOS" style="cursor:pointer;">Todos os Dias</div>
+              ${DIAS_SEMANA_SIGLAS.map(diaChip).join('')}
+            </div>
+          </div>
+
+          <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+            <div class="form-group" style="flex:1;min-width:110px;">
+              <label style="font-size:12px;color:var(--muted);">Horário Inicial</label>
+              <input type="time" id="f-hora-ini" value="${esc(t.horarioInicio)}"
+                style="width:100%;padding:8px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:14px;box-sizing:border-box;">
+            </div>
+            <div class="form-group" style="flex:1;min-width:110px;">
+              <label style="font-size:12px;color:var(--muted);">Horário Final</label>
+              <input type="time" id="f-hora-fim" value="${esc(t.horarioFim)}"
+                style="width:100%;padding:8px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:14px;box-sizing:border-box;">
+            </div>
+            <div class="form-group" style="flex:1;min-width:110px;">
+              <label style="font-size:12px;color:var(--muted);">Tolerância (min)</label>
+              <input type="number" id="f-tolerancia" min="0" value="${t.toleranciaMinutos||0}"
+                style="width:100%;padding:8px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:14px;box-sizing:border-box;">
+            </div>
+          </div>
+          <p style="font-size:11px;color:var(--muted);margin:-8px 0 14px;">
+            Até a tolerância: cobrança R$ 0,00. Passando 1 minuto sequer: cobra o tempo integral desde o minuto 0 (sem abater a tolerância).
+          </p>
+
+          <div style="display:flex;align-items:center;gap:0;border:1px solid var(--border);border-radius:7px;overflow:hidden;margin-bottom:14px;width:fit-content;">
+            <button class="toggle-cobranca" data-modo="FIXO"
+              style="padding:6px 16px;font-size:12px;border:none;cursor:pointer;background:${t.tipoCobranca==='FIXO'?'var(--accent)':'var(--panel2)'};color:${t.tipoCobranca==='FIXO'?'#fff':'var(--muted)'};">
+              Valor Fixo
+            </button>
+            <button class="toggle-cobranca" data-modo="PROGRESSIVO"
+              style="padding:6px 16px;font-size:12px;border:none;cursor:pointer;background:${t.tipoCobranca==='PROGRESSIVO'?'var(--accent)':'var(--panel2)'};color:${t.tipoCobranca==='PROGRESSIVO'?'#fff':'var(--muted)'};">
+              Tabela Progressiva
+            </button>
+          </div>
+
+          <div class="modo-fixo" style="display:${t.tipoCobranca==='FIXO'?'block':'none'};">
+            <div class="form-group">
+              <label style="font-size:12px;color:var(--muted);">Valor único cobrado ao ultrapassar a tolerância</label>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="color:var(--muted);font-size:13px;">R$</span>
+                <input type="number" id="f-valor-fixo" step="0.01" min="0" placeholder="0,00" value="${t.valorFixo||''}"
+                  style="width:120px;padding:7px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:14px;">
+              </div>
+            </div>
+          </div>
+
+          <div class="modo-progressivo" style="display:${t.tipoCobranca==='PROGRESSIVO'?'block':'none'};">
+            <div class="form-group" style="margin-bottom:12px;">
+              <label style="font-size:12px;color:var(--muted);">Teto da Diária (24h) — opcional</label>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="color:var(--muted);font-size:13px;">R$</span>
+                <input type="number" id="f-teto" step="0.01" min="0" placeholder="0,00" value="${t.tetoDiaria||''}"
+                  style="width:120px;padding:7px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:14px;">
+              </div>
+            </div>
+
+            <div style="margin-bottom:10px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                <label style="font-size:12px;color:var(--muted);">Faixas Progressivas</label>
+                <button id="btn-add-faixa" style="font-size:11px;padding:3px 10px;background:none;border:1px solid var(--accent2);color:var(--accent2);border-radius:5px;cursor:pointer;">+ Faixa</button>
+              </div>
+              <div class="faixas-list" style="display:flex;flex-direction:column;gap:6px;">
+                ${(t.faixas||[]).map(fx=>`
+                  <div class="faixa-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <span style="font-size:12px;color:var(--muted);white-space:nowrap;">Até</span>
+                    <input type="number" class="inp-faixa-min" min="1" value="${fx.ateMinutos||''}" placeholder="min"
+                      style="width:64px;padding:5px 8px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">
+                    <span style="font-size:12px;color:var(--muted);">min → R$</span>
+                    <input type="number" class="inp-faixa-val" step="0.01" min="0" value="${fx.valor||''}" placeholder="0,00"
+                      style="width:88px;padding:5px 8px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">
+                    <button class="btn-rem-faixa" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;padding:0 4px;">✕</button>
+                  </div>`).join('')}
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom:0;">
+              <label style="font-size:12px;color:var(--muted);">Fração Progressiva (após as faixas acima)</label>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <span style="font-size:12px;color:var(--muted);">A cada</span>
+                <input type="number" id="f-fracao-min" min="1" value="${t.fracaoMin||''}" placeholder="min"
+                  style="width:64px;padding:7px 8px;background:var(--panel2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:13px;">
+                <span style="font-size:12px;color:var(--muted);">min → +R$</span>
+                <input type="number" id="f-fracao-val" step="0.01" min="0" value="${t.fracaoValor||''}" placeholder="0,00"
+                  style="width:88px;padding:7px 8px;background:var(--panel2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:13px;">
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap;">
+            <button id="btn-voltar-lista" style="padding:9px 20px;background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;cursor:pointer;font-size:13px;">← Voltar</button>
+            <button id="btn-salvar-tabela" class="btn-primary" style="padding:9px 24px;">💾 Salvar Tabela</button>
+          </div>
+          <div id="modal-status" style="font-size:12px;text-align:right;margin-top:8px;min-height:16px;"></div>
+        </div>`;
+
+      overlay.querySelector('#modal-fechar').onclick = fechar;
+      overlay.querySelector('#btn-voltar-lista').onclick = renderLista;
+      overlay.onclick = e => { if(e.target === overlay) fechar(); };
+
+      // Toggle dias da semana — "Todos os Dias" desmarca os individuais e vice-versa
+      overlay.querySelectorAll('.dia-chip').forEach(chip=>{
+        chip.onclick = () => {
+          if(chip.dataset.dia === 'TODOS'){
+            overlay.querySelectorAll('.dia-chip').forEach(c => c.classList.toggle('on', c===chip));
+          } else {
+            overlay.querySelector('.dia-chip[data-dia="TODOS"]').classList.remove('on');
+            chip.classList.toggle('on');
+          }
+        };
+      });
+
+      // Toggle Fixo / Progressivo
+      overlay.querySelectorAll('.toggle-cobranca').forEach(btn=>{
+        btn.onclick = () => {
+          const modo = btn.dataset.modo;
+          overlay.querySelector('.modo-fixo').style.display        = modo==='FIXO'        ? 'block' : 'none';
+          overlay.querySelector('.modo-progressivo').style.display = modo==='PROGRESSIVO' ? 'block' : 'none';
+          overlay.querySelectorAll('.toggle-cobranca').forEach(b=>{
+            const ativo = b.dataset.modo === modo;
+            b.style.background = ativo ? 'var(--accent)' : 'var(--panel2)';
+            b.style.color      = ativo ? '#fff' : 'var(--muted)';
+          });
+        };
+      });
+
+      // Adicionar / remover faixas
+      const addFaixaRow = () => {
+        const lista = overlay.querySelector('.faixas-list');
+        const row = document.createElement('div');
+        row.className = 'faixa-row';
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;';
+        row.innerHTML = `
+          <span style="font-size:12px;color:var(--muted);white-space:nowrap;">Até</span>
+          <input type="number" class="inp-faixa-min" min="1" placeholder="min"
+            style="width:64px;padding:5px 8px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">
+          <span style="font-size:12px;color:var(--muted);">min → R$</span>
+          <input type="number" class="inp-faixa-val" step="0.01" min="0" placeholder="0,00"
+            style="width:88px;padding:5px 8px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">
+          <button class="btn-rem-faixa" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;padding:0 4px;">✕</button>`;
+        lista.appendChild(row);
+        row.querySelector('.btn-rem-faixa').onclick = () => row.remove();
+      };
+      overlay.querySelector('#btn-add-faixa').onclick = addFaixaRow;
+      overlay.querySelectorAll('.btn-rem-faixa').forEach(btn=>{
+        btn.onclick = () => btn.closest('.faixa-row').remove();
+      });
+
+      // Salvar (nova ou edição) → grava no array em memória e persiste tudo no Supabase
+      overlay.querySelector('#btn-salvar-tabela').onclick = async () => {
+        const status = overlay.querySelector('#modal-status');
+        const nomeTabela = overlay.querySelector('#f-nome').value.trim();
+        if(!nomeTabela){
+          status.style.color = 'var(--danger)';
+          status.textContent = 'Informe o nome da tabela.';
+          return;
+        }
+
+        const diasSelecionados = [...overlay.querySelectorAll('.dia-chip.on')].map(c=>c.dataset.dia);
+        const modoAtivo = overlay.querySelector('.modo-fixo').style.display !== 'none' ? 'FIXO' : 'PROGRESSIVO';
+
+        const novaTabela = {
+          id: t.id,
+          nome: nomeTabela,
+          diasSemana: diasSelecionados.length ? diasSelecionados : ['TODOS'],
+          horarioInicio: overlay.querySelector('#f-hora-ini').value || '00:00',
+          horarioFim:    overlay.querySelector('#f-hora-fim').value || '23:59',
+          toleranciaMinutos: parseInt(overlay.querySelector('#f-tolerancia').value) || 0,
+          tipoCobranca: modoAtivo,
+          valorFixo: modoAtivo==='FIXO' ? (parseFloat(overlay.querySelector('#f-valor-fixo').value)||0) : 0,
+          tetoDiaria: modoAtivo==='PROGRESSIVO' ? (parseFloat(overlay.querySelector('#f-teto').value)||0) : 0,
+          faixas: modoAtivo==='PROGRESSIVO'
+            ? [...overlay.querySelectorAll('.faixa-row')].map(row=>({
+                ateMinutos: parseInt(row.querySelector('.inp-faixa-min').value)||0,
+                valor:      parseFloat(row.querySelector('.inp-faixa-val').value)||0
+              })).filter(fx=>fx.ateMinutos>0)
+            : [],
+          fracaoMin:   modoAtivo==='PROGRESSIVO' ? (parseInt(overlay.querySelector('#f-fracao-min').value)||0) : 0,
+          fracaoValor: modoAtivo==='PROGRESSIVO' ? (parseFloat(overlay.querySelector('#f-fracao-val').value)||0) : 0,
+        };
+
+        if(editando) tabelasPreco[idx] = novaTabela;
+        else tabelasPreco.push(novaTabela);
+
+        status.style.color = 'var(--muted)';
+        status.textContent = 'Salvando...';
+        const ok = await persistir();
+        if(!ok){
+          status.style.color = 'var(--danger)';
+          status.textContent = 'Erro ao salvar — tente novamente.';
+          return;
+        }
+        renderLista();
+      };
+    };
+
+    // Persiste o array inteiro de tabelasPreco no Supabase (fonte única de verdade)
+    const persistir = async () => {
+      const { error } = await supa.from('na_filiais').update({ tabelas_preco: tabelasPreco }).eq('id', id);
+      if(error){ console.error(error); return false; }
+      const cached = (this._filiaisCache||[]).find(f=>f.id===id);
+      if(cached) cached.tabelas_preco = tabelasPreco;
+      await NexusAuth.log('na_filiais','UPDATE',id,null,{ tabelas_preco: tabelasPreco });
+      return true;
+    };
+
+    renderLista();
+  },
+
+  async _importarFiliais(file, el){
+    const msg    = el.querySelector('#import-msg');
+    const prog   = el.querySelector('#import-progress');
+    const bar    = el.querySelector('#import-bar');
+    const status = el.querySelector('#import-status');
+    prog.style.display = 'block';
+    msg.textContent = '';
+
+    try {
+      const buf  = await file.arrayBuffer();
+      const wb   = XLSX.read(buf, { type: 'array' });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+
+      status.textContent = `Lendo ${rows.length} linhas...`;
+
+      // ── Detecção inteligente de colunas pelo cabeçalho ──────────
+      // Procura a linha de cabeçalho nas primeiras 5 linhas
+      let headerRowIdx = -1;
+      let colMap = {};
+      const KEYWORDS = {
+        gestor:     ['gestor','gerente'],
+        supervisor: ['supervisor'],
+        nome:       ['nome','garagem','filial'],
+        codigo:     ['código','codigo','cod garagem','cod. garagem'],
+        estado:     ['estado','uf'],
+        regional:   ['regional'],
+        status:     ['status','situação','situacao']
+      };
+
+      for(let r = 0; r < Math.min(5, rows.length); r++){
+        const row = rows[r];
+        const tempMap = {};
+        row.forEach((cell, colIdx) => {
+          const cellLower = String(cell||'').toLowerCase().trim();
+          for(const [campo, palavras] of Object.entries(KEYWORDS)){
+            if(palavras.some(p => cellLower.includes(p)) && !tempMap[campo]){
+              tempMap[campo] = colIdx;
+            }
+          }
+        });
+        // Considera cabeçalho válido se achou pelo menos nome e código
+        if(tempMap.nome !== undefined && tempMap.codigo !== undefined){
+          headerRowIdx = r;
+          colMap = tempMap;
+          break;
+        }
+      }
+
+      if(headerRowIdx === -1){
+        // Fallback: tenta formato legado Export_Attributes_CC (Metas_2026.xlsb)
+        await this._importarFiliaisLegacy(rows, el, msg, bar, status);
+        return;
+      }
+
+      status.textContent = `Cabeçalho identificado na linha ${headerRowIdx+1}. Colunas: ${Object.keys(colMap).join(', ')}`;
+
+      // ── Extrai dados usando o mapa de colunas detectado ──────────
+      const gestoresMap     = {};
+      const supervisoresMap = {};
+      const garagens = [];
+
+      rows.slice(headerRowIdx+1).forEach(row=>{
+        const gestor   = colMap.gestor     !== undefined ? String(row[colMap.gestor]||'').trim()     : '';
+        const sup      = colMap.supervisor !== undefined ? String(row[colMap.supervisor]||'').trim() : '';
+        const nome     = colMap.nome       !== undefined ? String(row[colMap.nome]||'').trim()       : '';
+        const cod      = colMap.codigo     !== undefined ? String(row[colMap.codigo]||'').trim()     : '';
+        const estado   = colMap.estado     !== undefined ? String(row[colMap.estado]||'').trim()     : '';
+        const regional = colMap.regional   !== undefined ? String(row[colMap.regional]||'').trim()   : '';
+        const st       = colMap.status     !== undefined ? String(row[colMap.status]||'').trim().toLowerCase() : '';
+
+        if(gestor) gestoresMap[gestor] = gestoresMap[gestor] || null;
+        if(sup && gestor) supervisoresMap[sup] = supervisoresMap[sup] || { gestorNome: gestor, id: null };
+        else if(sup && !supervisoresMap[sup]) supervisoresMap[sup] = { gestorNome: null, id: null };
+        if(nome && cod) garagens.push({ gestor, sup, nome, cod, estado, regional, status: st.includes('encerr')?'encerrada':'ativa' });
+      });
+
+      if(garagens.length === 0){
+        status.textContent = 'Nenhuma filial encontrada no arquivo (verifique se há Nome e Código preenchidos).';
+        msg.style.color = 'var(--danger)';
+        msg.textContent = 'Nenhum dado válido encontrado';
+        return;
+      }
+
+      bar.style.width = '10%';
+      status.textContent = `${garagens.length} garagens · ${Object.keys(supervisoresMap).length} supervisores · ${Object.keys(gestoresMap).length} gestor(es)`;
+
+      // 1. Gestores
+      const { data: gestoresExist } = await supa.from('na_gestores').select('id,nome');
+      (gestoresExist||[]).forEach(g=>{ if(gestoresMap.hasOwnProperty(g.nome)) gestoresMap[g.nome] = g.id; });
+      for(const nomeG of Object.keys(gestoresMap)){
+        if(!gestoresMap[nomeG]){
+          const { data } = await supa.from('na_gestores').insert({ nome: nomeG }).select().single();
+          if(data){ gestoresMap[nomeG] = data.id; await NexusAuth.log('na_gestores','INSERT',data.id,null,data); }
+        }
+      }
+      bar.style.width = '25%';
+
+      // 2. Supervisores
+      const { data: supsExist } = await supa.from('na_supervisores').select('id,nome');
+      (supsExist||[]).forEach(s=>{ if(supervisoresMap[s.nome]) supervisoresMap[s.nome].id = s.id; });
+      for(const [nomeS, info] of Object.entries(supervisoresMap)){
+        if(!info.id){
+          const gestorId = info.gestorNome ? (gestoresMap[info.gestorNome] || null) : null;
+          const { data } = await supa.from('na_supervisores').insert({ nome: nomeS, gestor_id: gestorId }).select().single();
+          if(data){ info.id = data.id; await NexusAuth.log('na_supervisores','INSERT',data.id,null,data); }
+        }
+      }
+      bar.style.width = '40%';
+
+      // 3. Filiais
+      const { data: filiaisExist } = await supa.from('na_filiais').select('id,nome,codigo_garagem,status');
+      const porCod  = {};
+      const porNome = {};
+      (filiaisExist||[]).forEach(f=>{
+        if(f.codigo_garagem) porCod[f.codigo_garagem] = f;
+        porNome[f.nome.toLowerCase()] = f;
+      });
+
+      const nomsArquivo = new Set(garagens.map(g=>g.nome.toLowerCase()));
+      let inseridas=0, atualizadas=0, encerradas=0;
+
+      for(const ex of (filiaisExist||[])){
+        if(ex.status==='ativa' && !nomsArquivo.has(ex.nome.toLowerCase())){
+          await supa.from('na_filiais').update({status:'encerrada'}).eq('id',ex.id);
+          encerradas++;
+        }
+      }
+
+      let i=0;
+      for(const g of garagens){
+        i++;
+        bar.style.width = Math.round(40+(i/garagens.length)*55)+'%';
+        if(i%10===0) status.textContent = `Processando ${i}/${garagens.length}...`;
+        const supId     = g.sup ? (supervisoresMap[g.sup]?.id || null) : null;
+        const existente = (g.cod && porCod[g.cod]) || porNome[g.nome.toLowerCase()];
+        if(existente){
+          await supa.from('na_filiais').update({
+            nome: g.nome, codigo_garagem: g.cod || existente.codigo_garagem,
+            estado: g.estado||null, regional: g.regional||null,
+            supervisor_id: supId, status: g.status
+          }).eq('id', existente.id);
+          atualizadas++;
+        } else {
+          const { data } = await supa.from('na_filiais').insert({
+            nome: g.nome, codigo_garagem: g.cod || null,
+            estado: g.estado||null, regional: g.regional||null,
+            supervisor_id: supId, status: g.status
+          }).select().single();
+          if(data){ await NexusAuth.log('na_filiais','INSERT',data.id,null,data); inseridas++; }
+        }
+      }
+
+      bar.style.width = '100%';
+      status.textContent = `✓ ${inseridas} inseridas · ${atualizadas} atualizadas · ${encerradas} encerradas.`;
+      msg.style.color = 'var(--accent2)';
+      msg.textContent = `✓ Importação concluída`;
+      setTimeout(()=>{ this._abaFiliais(el); }, 2000);
+
+    } catch(err){
+      status.textContent = 'Erro: '+err.message;
+      msg.style.color = 'var(--danger)';
+      msg.textContent = 'Erro na importação';
+      console.error(err);
+    }
+  },
+
+  async _importarFiliaisLegacy(rows, el, msg, bar, status){
+    const garagens = [];
+    rows.forEach(row=>{
+      const cel = String(row[0]||'').trim();
+      if(cel.includes(' - ')){
+        const cod_cc = cel.split(' - ')[0].trim();
+        const nome   = cel.split(' - ').slice(1).join(' - ').trim();
+        let uf  = String(row[7]||'').replace('UF_','').trim();
+        let reg = String(row[8]||'').replace(/^\[\d+-/,'').trim();
+        if(nome) garagens.push({ cod_cc, nome, uf, reg });
+      }
+    });
+    bar.style.width = '30%';
+    const { data: existentes } = await supa.from('na_filiais').select('id,nome,codigo_cc,status');
+    const existMap = {};
+    (existentes||[]).forEach(f=>{ existMap[f.nome.toLowerCase()] = f; });
+    let inseridas=0, atualizadas=0, i=0;
+    for(const g of garagens){
+      i++;
+      bar.style.width = Math.round(30+(i/garagens.length)*65)+'%';
+      const ex = existMap[g.nome.toLowerCase()];
+      if(ex){
+        if(!ex.codigo_cc){ await supa.from('na_filiais').update({codigo_cc:g.cod_cc,estado:g.uf,regional:g.reg}).eq('id',ex.id); atualizadas++; }
+      } else {
+        const { data } = await supa.from('na_filiais').insert({nome:g.nome,codigo_cc:g.cod_cc,estado:g.uf,regional:g.reg,status:'ativa'}).select().single();
+        if(data){ await NexusAuth.log('na_filiais','INSERT',data.id,null,data); inseridas++; }
+      }
+    }
+    bar.style.width = '100%';
+    status.textContent = `✓ ${inseridas} inseridas · ${atualizadas} atualizadas.`;
+    msg.style.color = 'var(--accent2)';
+    msg.textContent = `✓ Importação concluída`;
+    setTimeout(()=>{ this._abaFiliais(el); }, 2000);
+  },
+
+  // ── ABA USUÁRIOS (só admin) ─────────────────────────────────────
+  async _abaUsuarios(el){
+    if(!NexusAuth.isAdmin){ el.innerHTML = '<p style="color:var(--danger);">Acesso restrito ao administrador.</p>'; return; }
+
+    const { data: usuarios } = await supa.from('na_usuarios').select('*').order('criado_em', {ascending:false});
+
+    const statusBadge = s => ({
+      aprovado:  `<span style="color:var(--accent2);font-weight:600;">✅ Aprovado</span>`,
+      pendente:  `<span style="color:var(--warn);font-weight:600;">⏳ Pendente</span>`,
+      bloqueado: `<span style="color:var(--danger);font-weight:600;">❌ Bloqueado</span>`
+    }[s] || s);
+
+    const papelBadge = p => p === 'admin'
+      ? `<span style="color:var(--accent);font-size:11px;font-weight:600;">👑 Admin</span>`
+      : `<span style="color:var(--muted);font-size:11px;">Usuário</span>`;
+
+    el.innerHTML = `
+      <div class="panel">
+        <h2>Usuários (${(usuarios||[]).length})</h2>
+        <table class="data-table">
+          <thead><tr><th>Nome</th><th>E-mail</th><th>Papel</th><th>Status</th><th>Desde</th><th></th></tr></thead>
+          <tbody>
+            ${(usuarios||[]).map(u=>`
+              <tr>
+                <td>${esc(u.nome||'—')}</td>
+                <td style="font-size:12px;">${esc(u.email)}</td>
+                <td>${papelBadge(u.papel||'usuario')}</td>
+                <td>${statusBadge(u.status)}</td>
+                <td style="font-size:12px;color:var(--muted);">${new Date(u.criado_em).toLocaleDateString('pt-BR')}</td>
+                <td style="white-space:nowrap;">
+                  ${u.email !== ADMIN_EMAIL ? `
+                    <select class="sel-papel" data-id="${u.id}"
+                      style="background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 6px;font-size:11px;margin-right:4px;">
+                      <option value="usuario" ${(u.papel||'usuario')==='usuario'?'selected':''}>Usuário</option>
+                      <option value="admin"   ${u.papel==='admin'?'selected':''}>Admin</option>
+                    </select>
+                    ${u.status !== 'aprovado'  ? `<button class="btn-edit-sm btn-aprovar"    data-id="${u.id}">Aprovar</button>` : ''}
+                    ${u.status !== 'bloqueado' ? `<button class="btn-danger-sm btn-bloquear" data-id="${u.id}">Bloquear</button>` : ''}
+                    ${u.status === 'bloqueado' ? `<button class="btn-edit-sm btn-reativar"   data-id="${u.id}">Reativar</button>` : ''}
+                  ` : '<span style="font-size:11px;color:var(--muted);">👑 Admin</span>'}
+                </td>
+              </tr>`).join('') || '<tr><td colspan="6" style="color:var(--muted)">Nenhum usuário</td></tr>'}
+          </tbody>
+        </table>
+      </div>`;
+
+    el.querySelectorAll('.sel-papel').forEach(sel=>{
+      sel.onchange = async ()=>{
+        await supa.from('na_usuarios').update({ papel: sel.value }).eq('id', sel.dataset.id);
+        await NexusAuth.log('na_usuarios','UPDATE',sel.dataset.id,null,{papel:sel.value});
+      };
+    });
+
+    el.querySelectorAll('.btn-aprovar').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const sel = btn.closest('tr').querySelector('.sel-papel');
+        const papel = sel ? sel.value : 'usuario';
+        await supa.from('na_usuarios').update({
+          status: 'aprovado', papel,
+          token_acao: null, token_expira: null,
+          aprovado_em: new Date().toISOString()
+        }).eq('id', btn.dataset.id);
+        await NexusAuth.log('na_usuarios','UPDATE',btn.dataset.id,null,{status:'aprovado',papel});
+        this._abaUsuarios(el);
+      };
+    });
+
+    el.querySelectorAll('.btn-bloquear').forEach(btn=>{
+      btn.onclick = async ()=>{
+        await supa.from('na_usuarios').update({ status:'bloqueado', token_acao:null, token_expira:null }).eq('id', btn.dataset.id);
+        await NexusAuth.log('na_usuarios','UPDATE',btn.dataset.id,null,{status:'bloqueado'});
+        this._abaUsuarios(el);
+      };
+    });
+
+    el.querySelectorAll('.btn-reativar').forEach(btn=>{
+      btn.onclick = async ()=>{
+        await supa.from('na_usuarios').update({ status:'aprovado', aprovado_em: new Date().toISOString() }).eq('id', btn.dataset.id);
+        await NexusAuth.log('na_usuarios','UPDATE',btn.dataset.id,null,{status:'aprovado'});
+        this._abaUsuarios(el);
+      };
+
+    });
+  },
+
+  // ── ABA LOG ─────────────────────────────────────────────────────
+  async _abaLog(el){
+    if(!NexusAuth.isAdmin){ el.innerHTML = '<p style="color:var(--danger);">Acesso restrito ao administrador.</p>'; return; }
+    const { data: logs } = await supa.from('na_log_alteracoes')
+      .select('*').order('criado_em',{ascending:false}).limit(100);
+
+    el.innerHTML = `
+      <div class="panel">
+        <h2>Últimas 100 alterações</h2>
+        <table class="data-table">
+          <thead><tr><th>Data/Hora</th><th>Usuário</th><th>Tabela</th><th>Operação</th></tr></thead>
+          <tbody>
+            ${(logs||[]).map(l=>`
+              <tr>
+                <td style="white-space:nowrap;">${new Date(l.criado_em).toLocaleString('pt-BR')}</td>
+                <td>${esc(l.usuario_email||"—")}</td>
+                <td style="font-family:monospace;font-size:11px;">${esc(l.tabela)}</td>
+                <td><span style="color:${l.operacao==='DELETE'?'var(--danger)':l.operacao==='INSERT'?'var(--accent2)':'var(--warn)'};">${esc(l.operacao)}</span></td>
+              </tr>`).join('') || '<tr><td colspan="4" style="color:var(--muted)">Nenhuma alteração registrada</td></tr>'}
+          </tbody>
+        </table>
+      </div>`;
+  }
+};
+
+/* ---------------- Registro dos módulos (após todas as definições) ---------------- */
+Nexus.registerModule(ModuloRelatorios);
+Nexus.registerModule(ModuloPermanencia);
+Nexus.registerModule(ModuloReceita);
+Nexus.registerModule(ModuloCancelados);
+Nexus.registerModule(ModuloPagamentos);
+
+// Inicia após todos os scripts carregarem
+window.addEventListener('load', async () => {
+  Nexus.registerModule(ModuloConfiguracoes);
+  document.getElementById('shell').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'none';
+  await NexusAuth.init();
+});
+
+</script>
+</body>
+</html>
